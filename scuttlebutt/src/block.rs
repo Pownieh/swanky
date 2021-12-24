@@ -15,6 +15,9 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use std::arch::aarch64::*;
+
+
 /// Interpret a block as an element of the field F_{2^128}
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct F128(Block);
