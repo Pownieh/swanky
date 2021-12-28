@@ -10,6 +10,7 @@ mod tests {
     use rand::rngs::OsRng;
     use scuttlebutt::{Block, unix_channel_pair};
     use scuttlebutt::ring::R64;
+    use scuttlebutt::ring::rx::RX;
     use crate::ot::{FixedKeyInitializer, KosDeltaReceiver, KosDeltaSender, Receiver};
     use crate::ot::mozzarella::cache::cacheinit::GenCache;
     use crate::ot::mozzarella::cache::verifier::CachedVerifier;
@@ -29,7 +30,7 @@ mod tests {
             let mut rng2 = StdRng::seed_from_u64(root.gen());
 
             let fixed_key: Block = rng1.gen();
-            let delta: R64 = R64(fixed_key.extract_0_u64()); // fyfy, TODO
+            let delta: RX = RX::from(fixed_key);
 
 
             let (mut c1, mut c2) = unix_channel_pair();

@@ -14,6 +14,7 @@ use ocelot::ot::mozzarella::{MozzarellaProver, MozzarellaVerifier};
 use scuttlebutt::ring::R64;
 use ocelot::ot::mozzarella::*;
 use ocelot::ot::mozzarella::cache::cacheinit::GenCache;
+use scuttlebutt::ring::rx::RX;
 
 const GEN_VOLE: usize = 1;
 const GEN_COTS: usize = 1;
@@ -29,7 +30,7 @@ fn main() -> Result<(), Error>{
         const T: usize = REG_MAIN_T; // TODO: remove this eventually
 
         let fixed_key: Block = OsRng.gen();
-        let moz_delta: R64 = R64(fixed_key.extract_0_u64()); // fyfy, TODO
+        let moz_delta: RX = RX::from(fixed_key); // fyfy, TODO
         println!("THE_DELTA:\t delta={}", moz_delta);
 
         let (mut prover_cache, mut verifier_cache) = GenCache::new::<_, K, T>(OsRng, moz_delta);
