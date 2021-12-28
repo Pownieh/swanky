@@ -226,7 +226,10 @@ impl Block {
 
     /// Extract the block element and treat it as a ring element from Z_2^k (for some k)
     #[inline]
-    pub fn extract_u128(&self) -> u128 { self.0 as u128 }
+    pub fn extract_u128(&self) -> u128 {
+        let val = u128::from(*self);
+        val
+    }
 
 
     /// Convert into a mutable pointer.
@@ -341,6 +344,21 @@ impl AsMut<[u8]> for Block {
         unsafe { &mut *(self as *mut Block as *mut [u8; 16]) }
     }
 }
+/*
+impl From<Block> for u128 {
+    #[inline]
+    fn from(m: Block) -> u128 {
+        #[cfg(target_endian = "little")]
+            {
+                bytemuck::cast(m.0)
+            }
+        #[cfg(target_endian = "big")]
+            {
+                u128::from(m.0.extract::<0>()) | (u128::from(m.0.extract::<1>()) << 64)
+            }
+    }
+}
+ */
 
 impl std::ops::BitAnd for Block {
     type Output = Block;

@@ -1,13 +1,46 @@
-use std::fmt;
+use std::{fmt};
+use std::cmp::Ordering;
+use std::convert::TryFrom;
 use std::fmt::Formatter;
+use std::iter::Sum;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 use crate::ring::Ring;
 
+use generic_array::{ArrayLength, GenericArray};
+use rand::distributions::Distribution;
+use rand::Rng;
 
-#[derive(Clone, Hash)]
+
+#[derive(
+    Clone,
+    Hash
+)]
 pub struct R64(pub u64);
 
+/// The error which occurs if the inputted `u64` or bit pattern doesn't correspond to a field
+/// element.
+#[derive(Debug, Clone, Copy)]
+pub struct BiggerThanModulus;
+impl std::error::Error for BiggerThanModulus {}
+impl std::fmt::Display for BiggerThanModulus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+
+impl Distribution<Self> for R64 {
+    #[inline]
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> R64 {
+        R64::from_u64(rng.gen::<u64>())
+    }
+}
+
 impl Ring for R64 {
+    const ZERO: Self = Self(0);
+
+    type ByteReprLen = generic_array::typenum::U8;
+    type FromBytesError = BiggerThanModulus;
 
     /// Convert into a mutable pointer.
     #[inline]
@@ -19,10 +52,33 @@ impl Ring for R64 {
     #[inline]
     fn as_ptr(&self) -> *const u8 { self.as_ref().as_ptr()
     }
+
+    fn from_bytes(buf: &GenericArray<u8, Self::ByteReprLen>) -> R64 {
+        Self::from(u64::from_le_bytes(*buf.as_ref()))
+    }
+
+    /// Return the canonical byte representation (byte representation of the reduced field element).
+    fn to_bytes(&self) -> GenericArray<u8, Self::ByteReprLen> {
+        u64::from(*self).to_le_bytes().into()
+    }
+
+    fn from_block(b: Block) -> Self {
+        Self {0: b.extract_0_u64()}
+    }
+
+    fn from_u128(u: u128) -> Self {
+        Self {0: u as u64}
+    }
+
+    fn from_u64(u: u64) -> Self {
+        Self {0: u}
+    }
+
 }
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::Block;
 
 #[cfg(feature = "serde")]
 #[derive(Serialize, Deserialize)]
@@ -118,6 +174,19 @@ impl From<u64> for R64 {
     }
 }
 
+// TODO: Figure out a better way to actually have the trait have both u64 and u128, I suck at generics :(
+impl From<u128> for R64 {
+    fn from(inp: u128) -> Self {
+        Self {0: inp as u64}
+    }
+}
+
+impl From<Block> for R64 {
+    fn from(inp: Block) -> Self {
+        Self {0: inp.extract_0_u64()}
+    }
+}
+
 
 #[inline]
 fn reduce(k: u128) -> u64 {
@@ -143,7 +212,7 @@ impl PartialEq<Self> for R64 {
 
 impl AddAssign<Self> for R64 {
     fn add_assign(&mut self, rhs: Self) {
-        self.0 = self.0.wrapping_add((rhs.0))
+        self.0 = self.0.wrapping_add(rhs.0)
     }
 }
 
@@ -192,6 +261,8 @@ impl std::iter::Sum for R64 {
     }
 }
 
+
+
 impl<'a> std::iter::Sum<&'a R64> for R64 {
     fn sum<I>(iter: I) -> Self
     where
@@ -204,6 +275,7 @@ impl<'a> std::iter::Sum<&'a R64> for R64 {
         return R64(reduce(out));
     }
 }
+
 
 impl Default for R64 {
     #[inline]

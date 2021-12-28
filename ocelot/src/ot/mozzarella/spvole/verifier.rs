@@ -13,21 +13,23 @@ use scuttlebutt::{AbstractChannel, AesRng, Block};
 use crate::ot::mozzarella::cache::verifier::CachedVerifier;
 use rayon::prelude::*;
 use scuttlebutt::{ring::R64, F128};
+use scuttlebutt::ring::Ring;
+use scuttlebutt::ring::rx::RX;
 
 #[allow(non_snake_case)]
 pub struct SingleVerifier<'a, const N: usize, const H: usize> {
     ggm_verifier: ggmVerifier::Verifier,
     // rng: AesRng,
     index: usize,
-    Delta: R64,
-    base_vole: &'a Vec<R64>,
-    out_v: &'a mut [R64; N],
-    a_prime: R64,
-    b: R64,
-    gamma: R64,
-    d: R64,
+    Delta: RX, // TODO: Should live in a smaller field R40
+    base_vole: &'a Vec<RX>,
+    out_v: &'a mut [RX; N],
+    a_prime: RX,
+    b: RX,
+    gamma: RX,
+    d: RX,
     chi_seed: Block,
-    VV: R64,
+    VV: RX,
     ggm_KKs: [(Block, Block); H],
     ggm_K_final: Block,
     ggm_checking_values: [Block; N],
@@ -40,9 +42,9 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
     #[allow(non_snake_case)]
     pub fn init(
         index: usize,
-        Delta: R64,
-        base_vole: &'a Vec<R64>,
-        out_v: &'a mut [R64; N],
+        Delta: RX,
+        base_vole: &'a Vec<RX>,
+        out_v: &'a mut [RX; N],
     ) -> Self {
         Self {
             ggm_verifier: ggmVerifier::Verifier::init(),
@@ -51,12 +53,12 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
             Delta,
             base_vole,
             out_v,
-            a_prime: R64::default(),
-            b: R64::default(),
-            gamma: R64::default(),
-            d: R64::default(),
+            a_prime: RX::default(),
+            b: RX::default(),
+            gamma: RX::default(),
+            d: RX::default(),
             chi_seed: Block::default(),
-            VV: R64::default(),
+            VV: RX::default(),
             ggm_KKs: [(Default::default(), Default::default()); H],
             ggm_K_final: Default::default(),
             ggm_checking_values: [Default::default(); N],
@@ -70,7 +72,7 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
         let (ggm_values, ggm_checking_values, ggm_K_final) =
             self.ggm_verifier.gen(&mut self.ggm_KKs).unwrap();
 
-        *self.out_v = ggm_values.map(|x| R64::from(x.extract_0_u64()));
+        *self.out_v = ggm_values.map(|x| RX::from_u128(x.extract_u128())); // TODO: Fix this so it calls generic extract
         self.ggm_K_final = ggm_K_final;
         self.ggm_checking_values = ggm_checking_values;
     }
@@ -140,19 +142,22 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
             .zip(self.out_v.iter())
             .filter(|x| *x.0)
             .map(|x| x.1)
-            .sum::<R64>();
+            .sum::<RX>();
+
     }
     pub fn stage_6_communication<C: AbstractChannel>(
         &mut self,
         channel: &mut C,
     ) -> Result<(), Error> {
-        let x_star: R64 = channel.receive()?;
+        let x_star: RX = channel.receive()?;
         let y_star = self.base_vole[2 * self.index + 1];
-        let y: R64 = y_star - self.Delta * x_star;
+
+        let y: RX = y_star - self.Delta * x_star;
         self.VV -= y;
 
+
         // TODO: implement F_EQ functionality
-        let VP = channel.receive()?;
+        let VP: RX = channel.receive()?;
         assert_eq!(self.VV, VP);
 
         Ok(())
@@ -180,32 +185,26 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
 }
 
 pub struct Verifier {
-    pub delta: R64, // tmp
+    pub delta: RX, // TODO: Should come from R40
 }
 
 impl Verifier {
-    pub fn init(delta: R64) -> Self {
+    pub fn init(delta: RX) -> Self {
         Self { delta }
     }
     #[allow(non_snake_case)]
-    pub fn extend<
-        OT: OtSender<Msg = Block> + CorrelatedSender + RandomSender,
-        C: AbstractChannel,
-        RNG: CryptoRng + Rng,
-        const N: usize,
-        const H: usize,
-    >(
+    pub fn extend<OT: OtSender<Msg=Block> + CorrelatedSender + RandomSender, C: AbstractChannel, RNG: CryptoRng + Rng, const N: usize, const H: usize>(
         &mut self,
         channel: &mut C,
         _rng: &mut RNG,
         num: usize, // number of repetitions
         ot_sender: &mut OT,
         cache: &mut CachedVerifier,
-    ) -> Result<Vec<[R64; N]>, Error> {
+    ) -> Result<Vec<[RX; N]>, Error> {
         assert_eq!(1 << H, N);
 
         // create result vector
-        let mut out_v: Vec<[R64; N]> = Vec::with_capacity(num); // make stuff array as quicker
+        let mut out_v: Vec<[RX; N]> = Vec::with_capacity(num); // make stuff array as quicker
         unsafe { out_v.set_len(num) };
 
         let base_vole = cache.get(2 * num);

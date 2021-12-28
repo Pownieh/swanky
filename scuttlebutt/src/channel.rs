@@ -1,7 +1,3 @@
-
-
-
-
 // -*- mode: rust; -*-
 //
 // This file is part of `scuttlebutt`.
@@ -29,7 +25,10 @@ use std::{
     io::{Read, Result, Write},
     rc::Rc,
 };
-use crate::ring::{R64, RX};
+use generic_array::{ArrayLength, GenericArray};
+
+use crate::ring::{R64, Ring};
+use crate::ring::rx::RX;
 
 pub trait Sendable {
     fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()>;
@@ -197,10 +196,6 @@ impl Receivable for RX {
     }
 }
 
-
-
-
-
 impl<'a> Sendable for &'a Block512 {
     #[inline(always)]
     fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()> {
@@ -265,6 +260,21 @@ impl Receivable for u64 {
     }
 }
 
+
+impl Sendable for u128 {
+    #[inline(always)]
+    fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()> {
+        chan.send(&self.to_le_bytes())
+    }
+}
+
+impl Receivable for u128 {
+    #[inline(always)]
+    fn receive<C: AbstractChannel>(chan: &mut C) -> Result<Self> {
+        chan.receive::<[u8; 16]>().map(|b| u128::from_le_bytes(b))
+    }
+}
+
 impl<'a> Sendable for &'a usize {
     #[inline(always)]
     fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()> {
@@ -310,6 +320,7 @@ impl Receivable for RistrettoPoint {
     }
 }
 
+
 /// A trait for managing I/O. `AbstractChannel`s are clonable, and provide basic
 /// read/write capabilities for both common and scuttlebutt-specific types.
 pub trait AbstractChannel: Clone {
@@ -347,6 +358,7 @@ pub trait AbstractChannel: Clone {
         self.read_bytes(&mut data)?;
         Ok(data)
     }
+
 }
 
 /// A standard read/write channel that implements `AbstractChannel`.
@@ -399,6 +411,7 @@ impl<R: Read, W: Write> AbstractChannel for Channel<R, W> {
     fn flush(&mut self) -> Result<()> {
         self.writer.borrow_mut().flush()
     }
+
 }
 
 /// Standard Read/Write channel built from a symmetric stream.

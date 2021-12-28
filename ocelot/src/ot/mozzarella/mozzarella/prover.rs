@@ -1,7 +1,8 @@
 use std::time::Instant;
 use rand::{CryptoRng, Rng};
 use scuttlebutt::{AbstractChannel, Block};
-use scuttlebutt::ring::R64;
+use scuttlebutt::ring::{R64, Ring};
+use scuttlebutt::ring::rx::RX;
 use super::*;
 
 use crate::Error;
@@ -25,7 +26,7 @@ impl Prover {
         rng: &mut R,
         cache: &mut CachedProver,
         sps_prover: &mut spsProver,
-    ) -> Result<(Vec<R64>, Vec<R64>), Error> {
+    ) -> Result<(Vec<RX>, Vec<RX>), Error> {
         let mut kos18_receiver = KosDeltaReceiver::init(channel, rng)?;
         let mut alphas: [usize; REG_MAIN_T] = random_array::<_, REG_MAIN_T>(rng, REG_MAIN_SPLEN);
 
@@ -67,7 +68,7 @@ impl Prover {
         channel: &mut C,
         alphas: &mut [usize; T], // error-positions of each spsvole
         ot_receiver: &mut OT,
-    ) -> Result<(Vec<R64>, Vec<R64>), Error> {
+    ) -> Result<(Vec<RX>, Vec<RX>), Error> {
 
         #[cfg(debug_assertions)]
             {
@@ -80,16 +81,16 @@ impl Prover {
         let code =  &REG_MAIN_CODE;
 
         let num = T;
-        let (mut w, u): (Vec<[R64;SPLEN]>, Vec<[R64; SPLEN]>) = spvole.extend::<_,_,_, SPLEN, LOG_SPLEN>(channel, rng, num, ot_receiver, cache, alphas)?;
+        let (mut w, u): (Vec<[RX;SPLEN]>, Vec<[RX; SPLEN]>) = spvole.extend::<_,_,_, SPLEN, LOG_SPLEN>(channel, rng, num, ot_receiver, cache, alphas)?;
 
-        let e_flat = flatten::<R64, SPLEN>(&u[..]);
-        let c_flat = flatten_mut::<SPLEN>(&mut w[..]);
+        let e_flat = flatten::<RX, SPLEN>(&u[..]);
+        let c_flat = flatten_mut::<RX, SPLEN>(&mut w[..]);
 
 
 
-        let mut u_k: [R64; K] = [R64::default(); K];
-        let mut w_k: [R64; K] = [R64::default(); K];
-        let (u_tmp, w_tmp): (Vec<R64>, Vec<R64>) = cache.get(K);
+        let mut u_k: [RX; K] = [RX::default(); K];
+        let mut w_k: [RX; K] = [RX::default(); K];
+        let (u_tmp, w_tmp): (Vec<RX>, Vec<RX>) = cache.get(K);
 
         for i in 0..K {
             u_k[i] = u_tmp[i];

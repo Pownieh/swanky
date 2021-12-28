@@ -1,26 +1,27 @@
-use scuttlebutt::ring::R64;
+use scuttlebutt::ring::{R64, Ring};
+use scuttlebutt::ring::rx::RX;
 
 pub struct CachedVerifier {
-    v: Vec<R64>, // cache
+    v: Vec<RX>, // cache
 }
 
 impl CachedVerifier {
 
-    pub fn init(v: Vec<R64>) -> Self {
+    pub fn init(v: Vec<RX>) -> Self {
         Self {
             v,
         }
     }
 
-    pub fn append<I1: Iterator<Item=R64>>(&mut self, v: I1) {
+    pub fn append<I1: Iterator<Item=RX>>(&mut self, v: I1) {
         self.v.extend(v);
     }
 
-    pub fn pop(&mut self) -> R64 {
+    pub fn pop(&mut self) -> RX {
         self.v.pop().unwrap()
     }
 
-    pub fn get(&mut self, amount: usize) -> Vec<R64> {
+    pub fn get(&mut self, amount: usize) -> Vec<RX> {
         self.v[..amount].to_vec()
 
     }

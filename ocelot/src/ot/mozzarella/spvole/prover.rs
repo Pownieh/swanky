@@ -10,25 +10,30 @@ use crate::{
 use rand::{CryptoRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use scuttlebutt::{ring::R64, AbstractChannel, AesRng, Block, F128};
+use scuttlebutt::ring::Ring;
+use scuttlebutt::ring::rx::RX;
 
 #[allow(non_snake_case)]
-pub struct SingleProver<'a, const N: usize, const H: usize> {
+pub struct SingleProver<
+    'a,
+    const N: usize,
+    const H: usize> {
     ggm_prover: ggmProver::Prover,
     rng: AesRng,
     index: usize,
     alpha: usize,
     // bit decomposition of alpha
     alpha_bits: [bool; H],
-    base_vole: &'a (Vec<R64>, Vec<R64>),
-    out_w: &'a mut [R64; N],
-    out_u: &'a mut [R64; N],
-    beta: R64,
-    delta: R64,
-    a_prime: R64,
-    d: R64,
+    base_vole: &'a (Vec<RX>, Vec<RX>),
+    out_w: &'a mut [RX; N],
+    out_u: &'a mut [RX; N],
+    beta: RX,
+    delta: RX,
+    a_prime: RX,
+    d: RX,
     chi_seed: Block,
-    x_star: R64,
-    VP: R64,
+    x_star: RX,
+    VP: RX,
     ggm_Ks: Vec<Block>,
     ggm_K_final: Block,
     ggm_checking_values: [Block; N],
@@ -41,9 +46,9 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
     pub fn init(
         index: usize,
         alpha: usize,
-        base_vole: &'a (Vec<R64>, Vec<R64>),
-        out_w: &'a mut [R64; N],
-        out_u: &'a mut [R64; N],
+        base_vole: &'a (Vec<RX>, Vec<RX>),
+        out_w: &'a mut [RX; N],
+        out_u: &'a mut [RX; N],
     ) -> Self {
         Self {
             ggm_prover: ggmProver::Prover::init(),
@@ -54,13 +59,13 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
             base_vole,
             out_w,
             out_u,
-            beta: R64::default(),
-            delta: R64::default(),
-            a_prime: R64::default(),
-            d: R64::default(),
+            beta: RX::default(),
+            delta: RX::default(),
+            a_prime: RX::default(),
+            d: RX::default(),
             chi_seed: Block::default(),
-            x_star: R64::default(),
-            VP: R64::default(),
+            x_star: RX::default(),
+            VP: RX::default(),
             ggm_Ks: Vec::new(),
             ggm_K_final: Block::default(),
             ggm_checking_values: [Block::default(); N],
@@ -74,8 +79,8 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
         let a = self.base_vole.0[2 * self.index];
         let c = self.base_vole.1[2 * self.index];
         self.delta = c;
-        while self.beta.0 == 0 {
-            self.beta = R64(self.rng.next_u64());
+        while self.beta.is_zero() {
+            self.beta = RX::from_u128(self.rng.gen()); // TODO: Somehow make generic
         }
         self.out_u[self.alpha] = self.beta;
         self.a_prime = self.beta - a;
@@ -131,7 +136,7 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
     }
 
     pub fn stage_5_computation(&mut self) {
-        let w_alpha: R64 = self.delta - self.d - self.out_w.iter().sum();
+        let w_alpha: RX = self.delta - self.d - self.out_w.iter().sum();
         self.out_w[self.alpha] = w_alpha;
 
         // expand seed to bit vector chi with Hamming weight N/2
@@ -153,7 +158,7 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
             indices
         };
 
-        let chi_alpha: R64 = R64(if chi[self.alpha] { 1 } else { 0 });
+        let chi_alpha: RX = RX::from(if chi[self.alpha] { 1 as u64 } else { 0 as u64});
         let x = self.base_vole.0[2 * self.index + 1];
         let z = self.base_vole.1[2 * self.index + 1];
 
@@ -165,8 +170,10 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
             .zip(self.out_w.iter())
             .filter(|x| *x.0)
             .map(|x| x.1)
-            .sum::<R64>()
-            - z;
+            .sum::<RX>();
+
+        self.VP -= z;
+
     }
 
     pub fn stage_6_communication<C: AbstractChannel>(
@@ -222,9 +229,9 @@ impl Prover {
         ot_receiver: &mut OT,
         cache: &mut CachedProver,
         alphas: &[usize],
-    ) -> Result<(Vec<[R64; N]>, Vec<[R64; N]>), Error> {
-        let mut out_w: Vec<[R64; N]> = vec![[R64::default(); N]; num];
-        let mut out_u: Vec<[R64; N]> = vec![[R64::default(); N]; num];
+    ) -> Result<(Vec<[RX; N]>, Vec<[RX; N]>), Error> {
+        let mut out_w: Vec<[RX; N]> = vec![[RX::default(); N]; num];
+        let mut out_u: Vec<[RX; N]> = vec![[RX::default(); N]; num];
 
         let base_vole = cache.get(2 * num);
 

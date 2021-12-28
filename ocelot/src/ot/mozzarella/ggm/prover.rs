@@ -9,6 +9,8 @@ use crate::{
 };
 use rand::Rng;
 use scuttlebutt::{ring::R64, AbstractChannel, AesHash, AesRng, Block, F128};
+use scuttlebutt::ring::Ring;
+use scuttlebutt::ring::rx::RX;
 
 use crate::ot::mozzarella::utils::prg2;
 
@@ -43,14 +45,17 @@ impl Prover {
     }
 
     #[allow(non_snake_case)]
-    pub fn eval<const N: usize, const H: usize>(
+    pub fn eval<
+        const N: usize,
+        const H: usize
+    >(
         &mut self,
         alphas: &[bool; H],
         K: &Vec<Block>,
         final_key: Block,
-    ) -> Result<([R64; N], [Block; N], usize), Error> {
+    ) -> Result<([RX; N], [Block; N], usize), Error> {
         let mut out: [Block; N] = [Block::default(); N];
-        let mut final_layer_values: [R64; N] = [R64::default(); N];
+        let mut final_layer_values: [RX; N] = [RX::default(); N];
         let mut final_layer_keys: [Block; N] = [Block::default(); N];
         let mut m: [Block; H] = [Block::default(); H];
 
@@ -139,7 +144,7 @@ impl Prover {
             let (s0, s1) = prg2(&self.hash, out[j]);
             last_layer_key ^= s1;
 
-            final_layer_values[j] = R64(s0.extract_0_u64());
+            final_layer_values[j] = RX::from(s0);
             final_layer_keys[j] = s1;
 
             if j == 0 {
@@ -209,7 +214,7 @@ impl Prover {
         channel: &mut C,
         ot_receiver: &mut OT,
         alphas: &[bool; H],
-    ) -> Result<([R64; N], usize), Error> {
+    ) -> Result<([RX; N], usize), Error> {
         let (K, final_key) = self
             .receive::<C, OT, N, H>(channel, ot_receiver, alphas)
             .unwrap();

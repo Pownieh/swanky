@@ -4,8 +4,8 @@
 // Copyright © 2019 Galois, Inc.
 // See LICENSE for licensing information.
 
-pub const K_MODULO: u8 = 64;
-pub const K_BIT_STRING: u128 = (2^(K_MODULO as u128)) - 1;
+pub const K_MODULO: u8 = 120;
+pub const K_BIT_STRING: u128 = (((1 as u128) << K_MODULO) - 1);
 
 
 /// Useful utility functions.

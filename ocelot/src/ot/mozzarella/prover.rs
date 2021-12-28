@@ -1,6 +1,7 @@
 use rand::{CryptoRng, Rng};
 use scuttlebutt::{AbstractChannel};
 use scuttlebutt::ring::R64;
+use scuttlebutt::ring::rx::RX;
 use crate::Error;
 use crate::ot::mozzarella::cache::prover::CachedProver;
 use crate::ot::mozzarella::spvole::prover::Prover as spProver;
@@ -25,10 +26,13 @@ impl Prover {
         &mut self,
         channel: &mut C,
         rng: &mut R,
-    ) -> Result<(R64, R64), Error> {
+    ) -> Result<(RX, RX), Error> {
         if self.cache.capacity() == REG_MAIN_VOLE {
             // replenish using main iteration
-            let (x, z) = mozzarella::prover::Prover::extend_main(
+            let (x, z) = mozzarella::prover::Prover::extend_main::<
+                C,
+                R,
+            >(
                 channel,
                 rng,
                 &mut self.cache,

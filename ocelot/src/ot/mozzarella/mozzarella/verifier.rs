@@ -1,7 +1,8 @@
 use std::time::Instant;
 use rand::{CryptoRng, Rng};
 use scuttlebutt::{AbstractChannel, Block};
-use scuttlebutt::ring::R64;
+use scuttlebutt::ring::{R64, Ring};
+use scuttlebutt::ring::rx::RX;
 use crate::Error;
 use crate::ot::{CorrelatedSender, FixedKeyInitializer, KosDeltaSender, RandomSender, Sender as OtSender};
 use crate::ot::mozzarella::cache::verifier::CachedVerifier;
@@ -20,10 +21,10 @@ impl Verifier {
     pub fn extend_main<C: AbstractChannel, R: Rng + CryptoRng> (
         channel: &mut C,
         rng: &mut R,
-        cache: &mut CachedVerifier, // should be a cache eventually
+        cache: &mut CachedVerifier,
         sps_verifier: &mut spsVerifier,
         fixed_key: [u8; 16],
-    ) -> Result<Vec<R64>, Error> {
+    ) -> Result<Vec<RX>, Error> {
 
         let mut kos18_sender = KosDeltaSender::init_fixed_key(channel, fixed_key, rng)?;
 
@@ -65,7 +66,7 @@ impl Verifier {
         rng: &mut R,
         channel: &mut C,
         ot_sender: &mut OT,
-    ) -> Result<Vec<R64>, Error> {
+    ) -> Result<Vec<RX>, Error> {
         #[cfg(debug_assertions)]
             {
                 debug_assert_eq!(T * SPLEN, N);
@@ -74,11 +75,11 @@ impl Verifier {
         let code =  &REG_MAIN_CODE;
 
         let num = T;
-        let b: Vec<[R64; SPLEN]> = spvole.extend::<_,_,_, SPLEN, LOG_SPLEN>(channel, rng, num, ot_sender, cache)?;
+        let b: Vec<[RX; SPLEN]> = spvole.extend::<_,_,_, SPLEN, LOG_SPLEN>(channel, rng, num, ot_sender, cache)?;
 
-        let mut b_flat = flatten::<R64, SPLEN>(&b[..]);
+        let mut b_flat = flatten::<RX, SPLEN>(&b[..]);
 
-        let k_cached: Vec<R64> = cache.get(K);
+        let k_cached: Vec<RX> = cache.get(K);
 
         let start = Instant::now();
         let out = code.mul_add(&k_cached[..], &mut b_flat);

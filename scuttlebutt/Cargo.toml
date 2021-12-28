@@ -13,7 +13,7 @@ version = "0.4.0"
 [lib]
 
 [features]
-nightly = ["rand/nightly"]
+nightly = ["curve25519-dalek/nightly", "curve25519-dalek/simd_backend", "rand/nightly"]
 serde1 = ["serde"]
 unstable = []
 
@@ -24,6 +24,8 @@ rand_core = "0.5"
 primitive-types = "0.10.1"
 serde = {version = "1", features = ["derive"], optional = true}
 sha2 = "0.8"
+generic-array = "0.14.4"
+bytemuck = { version = "1.5.1", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.2"

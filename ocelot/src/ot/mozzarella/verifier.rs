@@ -1,6 +1,7 @@
 use rand::{CryptoRng, Rng};
 use scuttlebutt::{AbstractChannel};
 use scuttlebutt::ring::R64;
+use scuttlebutt::ring::rx::RX;
 use crate::Error;
 use crate::ot::mozzarella::cache::verifier::CachedVerifier;
 use crate::ot::mozzarella::spvole::verifier::Verifier as spVerifier;
@@ -13,7 +14,7 @@ pub struct Verifier {
 }
 
 impl Verifier {
-    pub fn init(delta: R64, fixed_key: [u8; 16], cache: CachedVerifier) -> Self {
+    pub fn init(delta: RX, fixed_key: [u8; 16], cache: CachedVerifier) -> Self {
         // this thing should sample the delta, but for now I need it
         // to generate the base voles we need to bootstrap
         let spvole = spVerifier::init(delta);
@@ -28,11 +29,14 @@ impl Verifier {
         &mut self,
         channel: &mut C,
         rng: &mut R,
-    ) -> Result<R64, Error>{
+    ) -> Result<RX, Error>{
         // check if we have any saved in a cache
         if self.cache.capacity() == REG_MAIN_VOLE {
             // replenish using main iteration
-            let y = mozzarella::verifier::Verifier::extend_main(
+            let y = mozzarella::verifier::Verifier::extend_main::<
+                C,
+                R
+            >(
                 channel,
                 rng,
                 &mut self.cache,

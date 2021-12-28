@@ -15,6 +15,7 @@ use ocelot::ot::mozzarella::{MozzarellaProver, MozzarellaVerifier, REG_MAIN_K, R
 use ocelot::ot::mozzarella::cache::cacheinit::GenCache;
 use scuttlebutt::ring::R64;
 use rayon;
+use scuttlebutt::ring::rx::RX;
 
 const VOLE_ITER: usize = 1;
 
@@ -31,7 +32,8 @@ fn run() {
 
     let mut rng = OsRng;
     let fixed_key: Block = rng.gen();
-    let delta: R64 = R64(fixed_key.extract_0_u64());
+    let delta: RX = RX::from(fixed_key); // TODO: Should come from R40
+    println!("DELTA:\t{}", delta);
     let (prover_cache, verifier_cache) = GenCache::new::<_, REG_MAIN_K, REG_MAIN_T>(rng, delta);
     let (mut sender, mut receiver) = track_unix_channel_pair();
     println!("Startup time (init): {:?}", start.elapsed());
