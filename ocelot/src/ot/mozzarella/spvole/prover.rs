@@ -183,9 +183,6 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
     ) -> Result<(), Error> {
         channel.send(&self.x_star)?;
 
-        // TODO: implement F_EQ functionality
-
-
         // F_EQ
         let mut com: [u8; 32] = channel.receive()?;
 
@@ -202,9 +199,6 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
         } else {
             Err(Error::InvalidOpening)
         }
-
-
-        //channel.send(&self.VP)?;
     }
 
     #[allow(non_snake_case)]

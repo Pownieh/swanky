@@ -178,16 +178,6 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
         assert_eq!(self.VV, VP);
         Ok(())
 
-
-
-
-
-
-        /*// TODO: implement F_EQ functionality
-        let VP: RX = channel.receive()?;
-        assert_eq!(self.VV, VP);
-        Ok(())
-         */
     }
 
     #[allow(non_snake_case)]
