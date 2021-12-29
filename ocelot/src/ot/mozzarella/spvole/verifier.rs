@@ -13,6 +13,7 @@ use scuttlebutt::{AbstractChannel, AesRng, Block};
 use crate::ot::mozzarella::cache::verifier::CachedVerifier;
 use rayon::prelude::*;
 use scuttlebutt::{ring::R64, F128};
+use scuttlebutt::commitment::{Commitment, ShaCommitment};
 use scuttlebutt::ring::Ring;
 use scuttlebutt::ring::rx::RX;
 
@@ -145,9 +146,10 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
             .sum::<RX>();
 
     }
-    pub fn stage_6_communication<C: AbstractChannel>(
+    pub fn stage_6_communication<C: AbstractChannel, RNG: Rng + CryptoRng>(
         &mut self,
         channel: &mut C,
+        rng: &mut RNG,
     ) -> Result<(), Error> {
         let x_star: RX = channel.receive()?;
         let y_star = self.base_vole[2 * self.index + 1];
@@ -156,21 +158,48 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
         self.VV -= y;
 
 
-        // TODO: implement F_EQ functionality
+        // F_EQ
+        let seed = rng.gen::<[u8; 32]>();
+        let mut h = ShaCommitment::new(seed);
+        h.input(&self.VV.to_bytes());
+        let com = h.finish();
+
+        channel.send(&com)?;
+
+        let VP: RX = channel.receive()?;
+        if self.VV != VP {
+            return Err(Error::InvalidOpening);
+        }
+
+        channel.send(&seed)?;
+        channel.send(&self.VV)?;
+
+
+        assert_eq!(self.VV, VP);
+        Ok(())
+
+
+
+
+
+
+        /*// TODO: implement F_EQ functionality
         let VP: RX = channel.receive()?;
         assert_eq!(self.VV, VP);
-
         Ok(())
+         */
     }
 
     #[allow(non_snake_case)]
     pub fn extend<
         C: AbstractChannel,
         OT: OtSender<Msg = Block> + CorrelatedSender + RandomSender,
+        RNG: Rng + CryptoRng,
     >(
         &mut self,
         channel: &mut C,
         ot_sender: &mut OT,
+        rng: &mut RNG,
     ) -> Result<(), Error> {
         assert_eq!(1 << H, N);
         self.stage_1_computation();
@@ -178,7 +207,7 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
         self.stage_3_computation();
         self.stage_4_communication(channel)?;
         self.stage_5_computation();
-        self.stage_6_communication(channel)?;
+        self.stage_6_communication(channel, rng)?;
 
         Ok(())
     }
@@ -235,7 +264,7 @@ impl Verifier {
             sp.stage_5_computation();
         });
         single_verifiers.iter_mut().for_each(|sp| {
-            sp.stage_6_communication(channel).unwrap();
+            sp.stage_6_communication(channel, _rng).unwrap();
         });
 
         return Ok(out_v);

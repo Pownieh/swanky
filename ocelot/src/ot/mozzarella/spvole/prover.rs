@@ -10,6 +10,7 @@ use crate::{
 use rand::{CryptoRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use scuttlebutt::{ring::R64, AbstractChannel, AesRng, Block, F128};
+use scuttlebutt::commitment::{Commitment, ShaCommitment};
 use scuttlebutt::ring::Ring;
 use scuttlebutt::ring::rx::RX;
 
@@ -183,9 +184,27 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
         channel.send(&self.x_star)?;
 
         // TODO: implement F_EQ functionality
+
+
+        // F_EQ
+        let mut com: [u8; 32] = channel.receive()?;
+
         channel.send(&self.VP)?;
 
-        Ok(())
+        let mut seed: [u8; 32] = channel.receive()?;
+        let VV: RX = channel.receive()?;
+
+        let mut commit = ShaCommitment::new(seed);
+        commit.input(&VV.to_bytes());
+        if commit.finish() == com {
+            assert_eq!(self.VP, VV);
+            Ok(())
+        } else {
+            Err(Error::InvalidOpening)
+        }
+
+
+        //channel.send(&self.VP)?;
     }
 
     #[allow(non_snake_case)]

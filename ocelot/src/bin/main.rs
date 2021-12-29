@@ -30,7 +30,7 @@ fn main() -> Result<(), Error>{
         const T: usize = REG_MAIN_T; // TODO: remove this eventually
 
         let fixed_key: Block = OsRng.gen();
-        let moz_delta: RX = RX::from(fixed_key); // fyfy, TODO
+        let moz_delta: RX = RX::from(fixed_key);
         println!("THE_DELTA:\t delta={}", moz_delta);
 
         let (mut prover_cache, mut verifier_cache) = GenCache::new::<_, K, T>(OsRng, moz_delta);

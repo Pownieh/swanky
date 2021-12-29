@@ -146,6 +146,25 @@ where
         chan.send(&self.1)
     }
 }
+/*
+impl<'a> Sendable for [u8; 32] {
+    #[inline(always)]
+    fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()> {
+        chan.write_bytes(self.as_ref())
+    }
+}
+
+impl Receivable for [u8; 32] {
+    #[inline(always)]
+    fn receive<C: AbstractChannel>(chan: &mut C) -> Result<Self> {
+        let mut out = [0u8; 32];
+        chan.read_bytes(out.as_mut())?;
+        Ok(out)
+    }
+}*/
+
+
+
 
 impl<'a> Sendable for &Block {
     #[inline(always)]
@@ -188,6 +207,7 @@ impl<'a> Sendable for &RX {
 }
 
 impl Receivable for RX {
+    #[inline(always)]
     #[inline(always)]
     fn receive<C: AbstractChannel>(chan: &mut C) -> Result<Self> {
         let mut v = RX::default();
