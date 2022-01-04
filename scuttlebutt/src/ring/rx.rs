@@ -10,7 +10,7 @@ use crate::ring::Ring;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::Block;
-use crate::utils::{K_BIT_STRING, K_MODULO, STAT_SECURITY_STRING};
+use crate::utils::{K_BIT_STRING, K_MODULO, STAT_SECURITY, STAT_SECURITY_STRING};
 
 use generic_array::{ArrayLength, GenericArray};
 use rand::distributions::Distribution;

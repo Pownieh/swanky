@@ -32,8 +32,7 @@ fn run() {
 
     let mut rng = OsRng;
     let fixed_key: Block = rng.gen();
-    let delta: RX = RX::reduce_to_delta(fixed_key); // TODO: Should come from R40
-    println!("DELTA:\t{}", delta);
+    let delta: RX = RX::reduce_to_delta(fixed_key);
     let (prover_cache, verifier_cache) = GenCache::new::<_, REG_MAIN_K, REG_MAIN_T>(rng, delta);
     let (mut sender, mut receiver) = track_unix_channel_pair();
     println!("Startup time (init): {:?}", start.elapsed());
@@ -49,7 +48,7 @@ fn run() {
 
         let start = Instant::now();
 
-        // prover gen vole
+            // prover gen vole
         for _ in 0..VOLE_ITER {
             moz_prover.vole(&mut receiver, &mut rng).unwrap();
         }
@@ -79,7 +78,7 @@ fn run() {
         let start = Instant::now();
         // verifier gen vole
         for _ in 0..VOLE_ITER {
-            let _ = moz_verifier.vole(&mut sender, &mut rng).unwrap();
+            moz_verifier.vole(&mut sender, &mut rng).unwrap();
         }
         println!("Verifier time (vole): {:?}", start.elapsed());
         Ok(())
@@ -90,6 +89,5 @@ fn run() {
 }
 
 fn main() {
-    println!("\nRing: R64 \n");
     run()
 }

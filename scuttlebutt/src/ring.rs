@@ -58,7 +58,7 @@ pub trait Ring:
         *self == Self::ZERO
     }
 
-    fn reduce_to_delta(u: u128) -> Self;
+    fn reduce_to_delta(b: Block) -> Self;
 
     //fn compute_sum(inp: &[Self]) -> Self;
 
