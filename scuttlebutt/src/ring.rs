@@ -58,6 +58,8 @@ pub trait Ring:
         *self == Self::ZERO
     }
 
+    fn reduce_to_delta(u: u128) -> Self;
+
     //fn compute_sum(inp: &[Self]) -> Self;
 
     const ZERO: Self;

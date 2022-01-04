@@ -10,7 +10,7 @@ use crate::ring::Ring;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::Block;
-use crate::utils::{K_BIT_STRING, K_MODULO};
+use crate::utils::{K_BIT_STRING, K_MODULO, STAT_SECURITY_STRING};
 
 use generic_array::{ArrayLength, GenericArray};
 use rand::distributions::Distribution;
@@ -214,6 +214,11 @@ impl Ring for RX {
         Self {0: u as u128 & K_BIT_STRING}
     }
 
+    fn reduce_to_delta(b: Block) -> Self {
+        Self {
+            0: b.extract_u128() & STAT_SECURITY_STRING
+        }
+    }
 }
 
 /// The error which occurs if the inputted `u128` or bit pattern doesn't correspond to a field

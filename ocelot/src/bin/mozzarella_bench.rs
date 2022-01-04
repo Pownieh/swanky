@@ -13,7 +13,7 @@ use rand::rngs::OsRng;
 use ocelot::Error;
 use ocelot::ot::mozzarella::{MozzarellaProver, MozzarellaVerifier, REG_MAIN_K, REG_MAIN_T, init_lpn};
 use ocelot::ot::mozzarella::cache::cacheinit::GenCache;
-use scuttlebutt::ring::R64;
+use scuttlebutt::ring::{R64, Ring};
 use rayon;
 use scuttlebutt::ring::rx::RX;
 
@@ -32,7 +32,7 @@ fn run() {
 
     let mut rng = OsRng;
     let fixed_key: Block = rng.gen();
-    let delta: RX = RX::from(fixed_key); // TODO: Should come from R40
+    let delta: RX = RX::reduce_to_delta(fixed_key); // TODO: Should come from R40
     println!("DELTA:\t{}", delta);
     let (prover_cache, verifier_cache) = GenCache::new::<_, REG_MAIN_K, REG_MAIN_T>(rng, delta);
     let (mut sender, mut receiver) = track_unix_channel_pair();

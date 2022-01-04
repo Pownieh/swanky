@@ -74,11 +74,17 @@ impl Ring for R64 {
         Self {0: u}
     }
 
+    fn reduce_to_delta(b: Block) -> Self {
+        Self {
+            0: (b.extract_u128() & STAT_SECURITY_STRING) as u64
+        }
+    }
 }
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::Block;
+use crate::utils::STAT_SECURITY_STRING;
 
 #[cfg(feature = "serde")]
 #[derive(Serialize, Deserialize)]
