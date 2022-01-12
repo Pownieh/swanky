@@ -216,6 +216,24 @@ impl Receivable for RX {
     }
 }
 
+/*
+impl<'a, R: Ring> Sendable for &'a R {
+    #[inline(always)]
+    fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()> {
+        chan.write_bytes(self.as_ref())
+    }
+}
+
+impl<R: Ring> Receivable for R {
+    #[inline(always)]
+    fn receive<C: AbstractChannel>(chan: &mut C) -> Result<Self> {
+        let mut v = R::default();
+        chan.read_bytes(v.as_mut())?;
+        Ok(v)
+    }
+}*/
+
+
 impl<'a> Sendable for &'a Block512 {
     #[inline(always)]
     fn send<C: AbstractChannel>(self, chan: &mut C) -> Result<()> {
