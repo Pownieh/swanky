@@ -72,10 +72,15 @@ impl Verifier {
                 debug_assert_eq!(T * SPLEN, N);
             }
 
+        let mut nodes = [u32::default(); LOG_SPLEN];
+        for i in 0..LOG_SPLEN {
+            nodes[i] = (SPLEN as u32).div_ceil(2_u32.pow((LOG_SPLEN - i) as u32) as u32)
+        }
+
         let code =  &REG_MAIN_CODE;
 
         let num = T;
-        let b: Vec<[RX; SPLEN]> = spvole.extend::<_,_,_, SPLEN, LOG_SPLEN>(channel, rng, num, ot_sender, cache)?;
+        let b: Vec<[RX; SPLEN]> = spvole.extend::<_,_,_, SPLEN, LOG_SPLEN>(channel, rng, num, ot_sender, cache, nodes)?;
 
         let mut b_flat = flatten::<RX, SPLEN>(&b[..]);
 

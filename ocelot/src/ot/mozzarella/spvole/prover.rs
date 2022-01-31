@@ -40,6 +40,7 @@ pub struct SingleProver<
     ggm_checking_values: [Block; N],
     ggm_challenge_seed: Block,
     ggm_checking_hash: F128,
+    ggm_indices: [u32; H],
 }
 
 #[allow(non_snake_case)]
@@ -50,6 +51,7 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
         base_vole: &'a (Vec<RX>, Vec<RX>),
         out_w: &'a mut [RX; N],
         out_u: &'a mut [RX; N],
+        ggm_indices: [u32; H],
     ) -> Self {
         Self {
             ggm_prover: ggmProver::Prover::init(),
@@ -72,6 +74,7 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
             ggm_checking_values: [Block::default(); N],
             ggm_challenge_seed: Block::default(),
             ggm_checking_hash: F128::default(),
+            ggm_indices,
         }
     }
 
@@ -110,7 +113,7 @@ impl<'a, const N: usize, const H: usize> SingleProver<'a, N, H> {
         // evaluate GGM tree
         let (values, checking_values, _) = self
             .ggm_prover
-            .eval::<N, H>(&self.alpha_bits, &self.ggm_Ks, self.ggm_K_final)
+            .eval::<N, H>(&self.alpha_bits, &self.ggm_Ks, self.ggm_K_final, self.ggm_indices)
             .unwrap();
         // TODO: write directly into buffers
         *self.out_w = values;
@@ -242,6 +245,7 @@ impl Prover {
         ot_receiver: &mut OT,
         cache: &mut CachedProver,
         alphas: &[usize],
+        ggm_indices: [u32; H],
     ) -> Result<(Vec<[RX; N]>, Vec<[RX; N]>), Error> {
         let mut out_w: Vec<[RX; N]> = vec![[RX::default(); N]; num];
         let mut out_u: Vec<[RX; N]> = vec![[RX::default(); N]; num];
@@ -260,6 +264,7 @@ impl Prover {
                 &base_vole,
                 &mut out_w_i[0],
                 &mut out_u_i[0],
+                ggm_indices,
             ));
         }
 

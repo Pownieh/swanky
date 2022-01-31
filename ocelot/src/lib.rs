@@ -1,3 +1,4 @@
+#![feature(int_roundings)]
 // -*- mode: rust; -*-
 //
 // This file is part of ocelot.

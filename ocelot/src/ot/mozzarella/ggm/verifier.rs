@@ -12,6 +12,22 @@ use scuttlebutt::{AbstractChannel, AesHash, AesRng, Block, F128};
 
 use crate::ot::mozzarella::utils;
 
+/* LOGIC
+    - The last level must naturally have size some power of 2.
+    - We compute the next power of two, and that power will be the depth and amount of leafs
+    - We then only use the leafs that are relevant and ignore the rest
+        + One might be able to stop computation early and not waste a bunch of calls to the PRG
+        + Is 2^(Total_depth - current_depth) < needed_leafs? => Compute full layer
+        + Otherwise, each node computed will give 2^(Total_depth - current_depth) leafs, so compute enough of them such that > needed_leafs
+    - ???
+    - Profit
+
+    Strategy is to compute for each layer how many we need once and for all and then give
+        this list as input, so we only have to compute it once.
+*/
+
+
+
 pub struct Verifier {
     hash: AesHash,
     rng: AesRng,
@@ -28,6 +44,7 @@ impl Verifier {
     pub fn gen<const N: usize, const H: usize>(
         &mut self,
         m: &mut [(Block, Block); H],
+        ggm_indices: [u32; H],
     ) -> Result<([Block; N], [Block; N], Block), Error> {
         let mut s: [Block; N] = [Block::default(); N];
         let mut final_layer_keys: [Block; N] = [Block::default(); N];
@@ -54,7 +71,8 @@ impl Verifier {
                 //println!("INFO:\ti:{}\tWriting to {}", i, s[2*j]);
                 s[2 * j + 1] = res.1;
                 //println!("INFO:\ti:{}\tWriting to {}", i, s[2*j+1]);
-                if j == 0 {
+                if j == (ggm_indices[i] as usize) || j == 0 {
+                    println!("BREAKING AT j={}", j);
                     break;
                 }
                 j -= 1;
@@ -69,7 +87,7 @@ impl Verifier {
             final_key ^= res.1; // keep track of the complete XORs of each layer
             s[j] = res.0;
             final_layer_keys[j] = res.1;
-            if j == 0 {
+            if j == (ggm_indices[H - 1] as usize) || j == 0 {
                 break;
             }
             j -= 1;
@@ -138,8 +156,9 @@ impl Verifier {
         channel: &mut C,
         ot_sender: &mut OT,
         m: &mut [(Block, Block); H],
+        ggm_indices: [u32; H],
     ) -> Result<[Block; N], Error> {
-        let (final_layer_values, final_layer_keys, final_key) = self.gen(m).unwrap();
+        let (final_layer_values, final_layer_keys, final_key) = self.gen(m, ggm_indices).unwrap();
         self.send::<_, _, N, H>(channel, ot_sender, m, &final_key)?;
 
         let challenge_seed = self.receive_challenge(channel).unwrap();

@@ -14,6 +14,16 @@ use scuttlebutt::ring::rx::RX;
 
 use crate::ot::mozzarella::utils::prg2;
 
+
+/* LOGIC
+    - The last level must naturally have size some power of 2.
+    - We compute the next power of two, and that power will be the depth and amount of leafs
+    - We then only use the leafs that are relevant and ignore the rest
+    - ???
+    - Profit
+*/
+
+
 pub struct Prover {
     hash: AesHash,
     rng: AesRng,
@@ -53,6 +63,7 @@ impl Prover {
         alphas: &[bool; H],
         K: &Vec<Block>,
         final_key: Block,
+        ggm_indices: [u32; H],
     ) -> Result<([RX; N], [Block; N], usize), Error> {
         let mut out: [Block; N] = [Block::default(); N];
         let mut final_layer_values: [RX; N] = [RX::default(); N];
@@ -88,7 +99,7 @@ impl Prover {
             let mut j = (1 << i) - 1;
             loop {
                 if j == path_index {
-                    if j == 0 {
+                    if j == ggm_indices[i] as usize || j == 0 {
                         break;
                     }
                     j -= 1;
@@ -106,7 +117,7 @@ impl Prover {
                 out[2 * j] = s0;
                 out[2 * j + 1] = s1;
 
-                if j == 0 {
+                if j == ggm_indices[i] as usize || j == 0 {
                     break;
                 }
                 j -= 1;
@@ -116,7 +127,9 @@ impl Prover {
             path_index = 0;
             for tmp in 0..i + 1 {
                 let alpha_tmp = if alphas[i - tmp] { 1 } else { 0 };
-                path_index += alpha_tmp * (1 << (tmp));
+                path_index += ((2_u32.pow(i as u32)) - alpha_tmp * (1 << (tmp))) as usize;
+                path_index +=  (alpha_tmp * (1 << (tmp))) as usize;
+                println!("PATH_INDEX: {} and iteration: {}", path_index, i);
             }
             keyed_index = if 1 - index == 0 {
                 path_index - 1
@@ -134,7 +147,7 @@ impl Prover {
         let mut last_layer_key = Block::default();
         loop {
             if j == path_index {
-                if j == 0 {
+                if j == ggm_indices[H] as usize || j == 0 {
                     break;
                 }
                 j -= 1;
@@ -147,7 +160,7 @@ impl Prover {
             final_layer_values[j] = RX::from(s0);
             final_layer_keys[j] = s1;
 
-            if j == 0 {
+            if j == ggm_indices[H] as usize || j == 0 {
                 break;
             }
             j -= 1;
@@ -214,13 +227,14 @@ impl Prover {
         channel: &mut C,
         ot_receiver: &mut OT,
         alphas: &[bool; H],
+        ggm_indices: [u32; H],
     ) -> Result<([RX; N], usize), Error> {
         let (K, final_key) = self
             .receive::<C, OT, N, H>(channel, ot_receiver, alphas)
             .unwrap();
 
         let (final_layer_values, final_layer_keys, path_index) =
-            self.eval::<N, H>(alphas, &K, final_key).unwrap();
+            self.eval::<N, H>(alphas, &K, final_key, ggm_indices).unwrap();
 
         let challenge_seed: Block = self.send_challenge::<C>(channel).unwrap();
 

@@ -36,6 +36,7 @@ pub struct SingleVerifier<'a, const N: usize, const H: usize> {
     ggm_checking_values: [Block; N],
     ggm_challenge_seed: Block,
     ggm_challenge_response: F128,
+    tree_indices: [u32; H],
 }
 
 #[allow(non_snake_case)]
@@ -46,6 +47,7 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
         Delta: RX,
         base_vole: &'a Vec<RX>,
         out_v: &'a mut [RX; N],
+        tree_indices: [u32; H],
     ) -> Self {
         Self {
             ggm_verifier: ggmVerifier::Verifier::init(),
@@ -65,13 +67,14 @@ impl<'a, const N: usize, const H: usize> SingleVerifier<'a, N, H> {
             ggm_checking_values: [Default::default(); N],
             ggm_challenge_seed: Default::default(),
             ggm_challenge_response: Default::default(),
+            tree_indices,
         }
     }
 
     pub fn stage_1_computation(&mut self) {
         self.b = self.base_vole[2 * self.index];
         let (ggm_values, ggm_checking_values, ggm_K_final) =
-            self.ggm_verifier.gen(&mut self.ggm_KKs).unwrap();
+            self.ggm_verifier.gen(&mut self.ggm_KKs, self.tree_indices).unwrap();
 
         *self.out_v = ggm_values.map(|x| RX::from_u128(x.extract_u128())); // TODO: Fix this so it calls generic extract
         self.ggm_K_final = ggm_K_final;
@@ -219,6 +222,7 @@ impl Verifier {
         num: usize, // number of repetitions
         ot_sender: &mut OT,
         cache: &mut CachedVerifier,
+        tree_indices: [u32; H],
     ) -> Result<Vec<[RX; N]>, Error> {
         assert_eq!(1 << H, N);
 
@@ -235,6 +239,7 @@ impl Verifier {
                 self.delta,
                 &base_vole,
                 &mut out_v_i[0],
+                tree_indices,
             ));
         }
 
