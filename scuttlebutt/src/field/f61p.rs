@@ -8,7 +8,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
 /// A finite field over the Mersenne Prime 2^61 - 1
 #[derive(Clone, Copy, Eq, Debug, Hash)]
-pub struct F61p(u64);
+pub struct F61p(pub u64);
 
 const MODULUS: u64 = (1 << 61) - 1;
 
@@ -78,7 +78,7 @@ impl FiniteField for F61p {
     fn polynomial_modulus() -> Polynomial<Self::PrimeField> {
         Polynomial::x()
     }
-
+    
     type NumberOfBitsInBitDecomposition = generic_array::typenum::U61;
 
     fn bit_decomposition(&self) -> GenericArray<bool, Self::NumberOfBitsInBitDecomposition> {

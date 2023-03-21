@@ -114,6 +114,37 @@ impl<FE: FiniteField> FComProver<FE> {
     }
 
     /// Input a slice of values and returns a vector of its macs.
+    pub fn input_with_macprover<C: AbstractChannel, RNG: CryptoRng + Rng>(
+        &mut self,
+        channel: &mut C,
+        rng: &mut RNG,
+        x: &[FE::PrimeField],
+    ) -> Result<Vec<MacProver<FE>>, Error> {
+        let mut out = Vec::with_capacity(x.len());
+        self.input_low_level_with_macprover(channel, rng, x, &mut out)?;
+        Ok(out)
+    }
+
+    /// lower level implementation of `input` with pre-defined out vector.
+    pub fn input_low_level_with_macprover<C: AbstractChannel, RNG: CryptoRng + Rng>(
+        &mut self,
+        channel: &mut C,
+        rng: &mut RNG,
+        x: &[FE::PrimeField],
+        out: &mut Vec<MacProver<FE>>,
+    ) -> Result<(), Error> {
+        for i in 0..x.len() {
+            channel.flush().unwrap();
+            let r = self.random(channel, rng)?;
+            let y = x[i] - r.0;
+            out.push(MacProver(x[i], r.1));
+            channel.write_serializable::<FE::PrimeField>(&y)?;
+            channel.flush().unwrap();
+        }
+        Ok(())
+    }
+
+    /// Input a slice of values and returns a vector of its macs.
     pub fn input<C: AbstractChannel, RNG: CryptoRng + Rng>(
         &mut self,
         channel: &mut C,
@@ -134,10 +165,12 @@ impl<FE: FiniteField> FComProver<FE> {
         out: &mut Vec<FE>,
     ) -> Result<(), Error> {
         for i in 0..x.len() {
+            channel.flush().unwrap();
             let r = self.random(channel, rng)?;
             let y = x[i] - r.0;
             out.push(r.1);
             channel.write_serializable::<FE::PrimeField>(&y)?;
+            channel.flush().unwrap();
         }
         Ok(())
     }
@@ -430,9 +463,11 @@ impl<FE: FiniteField> FComVerifier<FE> {
         out: &mut Vec<MacVerifier<FE>>,
     ) -> Result<(), Error> {
         for _i in 0..num {
+            channel.flush().unwrap();
             let r = self.random(channel, rng)?;
             let y = channel.read_serializable::<FE::PrimeField>()?;
             out.push(MacVerifier(r.0 - y * self.delta));
+            channel.flush().unwrap();
         }
         Ok(())
     }

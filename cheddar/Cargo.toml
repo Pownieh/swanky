@@ -1,0 +1,32 @@
+[toolchain]
+channel = "nightly"
+
+[package]
+name = "square_decomp"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-traits = "0.2"
+rand = "0.8"
+scuttlebutt = { path = "../scuttlebutt", features = ["curve25519-dalek"] }
+ocelot = { path = "../ocelot" }
+
+
+[dev-dependencies]
+criterion = "0.3"
+rand_chacha = "0.3"
+
+[[bench]]
+name = "arithmetic"
+harness = false
+
+[[bench]]
+name = "decomposition"
+harness = false
+
+[[bench]]
+name = "is_prime"
+harness = false
