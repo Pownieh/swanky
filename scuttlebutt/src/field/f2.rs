@@ -105,6 +105,10 @@ impl FiniteField for F2 {
         assert_ne!(self.0, 0);
         Self::ONE
     }
+
+    fn compute_signed(&self) -> i64 {
+        todo!()
+    }
 }
 
 impl AddAssign<&F2> for F2 {

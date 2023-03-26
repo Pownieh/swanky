@@ -1,5 +1,5 @@
 use ocelot::edabits::{ProverConv, VerifierConv};
-use ocelot::svole::wykw::{LPN_EXTEND_MEDIUM, LPN_SETUP_MEDIUM};
+use ocelot::svole::wykw::{LPN_EXTEND_MEDIUM, LPN_EXTEND_SMALL, LPN_SETUP_MEDIUM, LPN_SETUP_SMALL};
 use scuttlebutt::{channel::track_unix_channel_pair, field::F61p, AesRng};
 use std::time::Instant;
 
@@ -8,9 +8,9 @@ type Verifier = VerifierConv<F61p>;
 
 fn run() {
     let (mut sender, mut receiver) = track_unix_channel_pair();
-    let nb_bits: usize = 8;
-    let n = 1000_000;
-    let num_bucket = 3;
+    let nb_bits: usize = 60;
+    let n = 10_000;
+    let num_bucket = 5;
     let num_cut = num_bucket;
     let with_quicksilver = true;
     let handle = std::thread::spawn(move || {
@@ -42,7 +42,12 @@ fn run() {
                 with_quicksilver,
             )
             .unwrap();
-        println!("Send time (conv): {:?}", start.elapsed());
+        let end = start.elapsed();
+        println!("Send time (conv): {:?}", end);
+        println!(
+            "Send time (conv) average: {:?}",
+            end.as_nanos() as f64 / 1000_000 as f64
+        );
     });
     #[cfg(target_os = "linux")]
     {

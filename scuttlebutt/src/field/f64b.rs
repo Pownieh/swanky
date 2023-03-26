@@ -148,6 +148,10 @@ impl FiniteField for F64b {
         }
         self.pow_var_time((1 << 64) - 2)
     }
+
+    fn compute_signed(&self) -> i64 {
+        todo!()
+    }
 }
 
 field_ops!(F64b);

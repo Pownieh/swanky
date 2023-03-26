@@ -41,7 +41,7 @@ pub fn is_prime_32(n: u32) -> bool {
     if has_small_divisors(n as u64) {
         return false;
     }
-    if n == 13 || n == 19 || n == 73 || n == 193 || n == 4075212 || n == 299210837 {
+    if n == 13 || n == 19 || n == 73 || n == 193 || n == 407521 || n == 299210837 {
         return true;
     }
     const BASES: [u64; 3] = [2, 7, 61];
@@ -67,7 +67,7 @@ pub fn is_prime_64(n: u64) -> bool {
     if has_small_divisors(n) {
         return false;
     }
-    if n == 13 || n == 19 || n == 73 || n == 193 || n == 4075212 || n == 299210837 {
+    if n == 13 || n == 19 || n == 73 || n == 193 || n == 407521 || n == 299210837 {
         return true;
     }
     const BASES: [u64; 7] = [2, 325, 9375, 28178, 450775, 9780504, 1795265022];
@@ -110,7 +110,7 @@ pub fn is_prime_64_faster(n: u64) -> bool {
             return is_sprp(n, d, s, b);
         }
     } else if n >> 16 != 0 {
-        let h = (n as u32).wrapping_mul(0x43fbf0c5) >> 24;
+        let h = (n as u32).wrapping_mul(0xad625b89) >> 24;
         let b = BASES32[h as usize];
         return is_sprp(n, d, s, b as u64);
     } else {
@@ -175,7 +175,7 @@ mod tests {
         13946817839235265601,
         17575983250388076607,
     ];
-    const COMPOSITES: [u64; 51] = [
+    const COMPOSITES: [u64; 53] = [
         32,
         93,
         104,
@@ -197,6 +197,8 @@ mod tests {
         61769,
         63883,
         486737,
+        1082401,
+        2284453,
         467930341,
         1247332693,
         1372384182,

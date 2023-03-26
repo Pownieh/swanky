@@ -1,15 +1,17 @@
-use ocelot::edabits::{FComVerifier, MacVerifier};
+use num_traits::pow;
+use ocelot::edabits::{FComProver, FComVerifier, MacVerifier};
 use ocelot::svole::wykw::LpnParams;
 use ocelot::Error;
 use rand::distributions::Uniform;
 use rand::{CryptoRng, Rng, SeedableRng};
-use scuttlebutt::field::F61p;
+use scuttlebutt::field::{F40b, F61p, FiniteField};
 use scuttlebutt::{AbstractChannel, AesRng, Block};
 
 const MODULUS: u64 = (1 << 61) - 1;
 
 pub struct RangeVerifier {
     pub fcom: FComVerifier<F61p>,
+    pub fcom_f2: FComVerifier<F40b>,
 }
 impl RangeVerifier {
     pub fn init<C: AbstractChannel, RNG: CryptoRng + Rng>(
@@ -19,18 +21,16 @@ impl RangeVerifier {
         lpn_extend: LpnParams,
     ) -> Self {
         let verifier = FComVerifier::init(channel, rng, lpn_setup, lpn_extend).unwrap();
-        Self { fcom: verifier }
+        let verifier_f2 = FComVerifier::init(channel, rng, lpn_setup, lpn_extend).unwrap();
+        Self {
+            fcom: verifier,
+            fcom_f2: verifier_f2,
+        }
     }
 
     fn check_results(&mut self, results: Vec<F61p>, bound: u64) -> Result<(), Error> {
         for x in results {
-            let mut actual_val: i64 = x.0 as i64;
-
-            if x.0 > (MODULUS - 1) / 2 {
-                actual_val = (MODULUS - x.0) as i64 * -1;
-            }
-
-            if !(actual_val < bound as i64) {
+            if !(x.compute_signed() < bound as i64) {
                 return Err(Error::Other("Prover fucked up".to_string()));
             }
         }
@@ -42,11 +42,13 @@ impl RangeVerifier {
         channel: &mut C,
         rng: &mut RNG,
         xs: Vec<MacVerifier<F61p>>,
-        lower_bounds: Vec<u64>,
-        upper_bounds: Vec<u64>,
+        lower_bounds: &Vec<u64>,
+        upper_bounds: &Vec<u64>,
         iterations: usize,
-        bound: u64,
+        (bound, slack): (u64, u64),
     ) {
+        let slack = (slack as f64).log2().ceil() as usize;
+
         let seed = rng.gen::<Block>();
 
         let _ = channel.write_block(&seed).unwrap();
@@ -60,7 +62,14 @@ impl RangeVerifier {
 
         let mut equality_checks: Vec<MacVerifier<F61p>> = Vec::with_capacity(xs.len() * iterations);
 
-        for _ in 0..iterations {
+        let mut hiding_macs: Vec<Vec<MacVerifier<F61p>>> =
+            vec![Vec::with_capacity(slack as usize); iterations];
+
+        for i in 0..iterations {
+            hiding_macs[i] = self.fcom.input(channel, rng, slack as usize).unwrap();
+        }
+
+        for j in 0..iterations {
             let out_decomposed = self.fcom.input(channel, rng, xs.len() * 4).unwrap();
             let out_squares = self.fcom.input(channel, rng, xs.len() * 4).unwrap();
             let out_bounds = self.fcom.input(channel, rng, xs.len()).unwrap();
@@ -112,6 +121,14 @@ impl RangeVerifier {
                 } else if c_vec[i] == 1 {
                     res = self.fcom.add(res, out_decomposed[i]);
                 }
+            }
+
+            for k in 0..slack {
+                res = self.fcom.add(
+                    res,
+                    self.fcom
+                        .affine_mult_cst(pow(F61p(2), k as usize), hiding_macs[j][k as usize]),
+                )
             }
 
             results.push(res);

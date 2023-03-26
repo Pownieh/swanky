@@ -15,6 +15,9 @@ pub trait FiniteField: FiniteRing + DivAssign<Self> + Div<Self, Output = Self> {
     /// Multiplication over field elements should be reduced over this polynomial.
     fn polynomial_modulus() -> Polynomial<Self::PrimeField>;
 
+    /// Compute the signed representation in [-(p-1)/2, (p-1)/2]
+    fn compute_signed(&self) -> i64;
+
     /// The generator for the multiplicative group.
     const GENERATOR: Self;
 

@@ -69,7 +69,7 @@ struct DabitVerifier<FE: FiniteField> {
 const FDABIT_SECURITY_PARAMETER: usize = 38;
 
 /// bit to field element
-fn f2_to_fe<FE: FiniteField>(b: F2) -> FE {
+pub fn f2_to_fe<FE: FiniteField>(b: F2) -> FE {
     let choice = b.ct_eq(&F2::ZERO);
     FE::conditional_select(&FE::ONE, &FE::ZERO, choice)
 }

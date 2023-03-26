@@ -78,7 +78,7 @@ impl FiniteField for F61p {
     fn polynomial_modulus() -> Polynomial<Self::PrimeField> {
         Polynomial::x()
     }
-    
+
     type NumberOfBitsInBitDecomposition = generic_array::typenum::U61;
 
     fn bit_decomposition(&self) -> GenericArray<bool, Self::NumberOfBitsInBitDecomposition> {
@@ -89,6 +89,14 @@ impl FiniteField for F61p {
             panic!("Zero cannot be inverted");
         }
         self.pow_var_time(u128::from(MODULUS) - 2)
+    }
+
+    fn compute_signed(&self) -> i64 {
+        let mut actual_val: i64 = self.0 as i64;
+        if self.0 > (MODULUS - 1) / 2 {
+            actual_val = (MODULUS - self.0) as i64 * -1;
+        }
+        actual_val
     }
 }
 

@@ -12,6 +12,7 @@ members = [
     "scuttlebutt",
     "simple-arith-circuit",
     "vectoreyes",
+    "cheddar",
 ]
 
 [workspace.package]
@@ -32,6 +33,7 @@ popsicle = { path = "popsicle" }
 scuttlebutt = { path = "scuttlebutt" }
 simple-arith-circuit = { path = "simple-arith-circuit" }
 vectoreyes = { path = "vectoreyes" }
+cheddar = { path = "cheddar" }
 
 # Patched Dependencies
 ff = { git = "https://github.com/GaloisInc/ff", rev = "b8d8570f67d04cf5a8b82df3d6eb36aeb4732e92" }

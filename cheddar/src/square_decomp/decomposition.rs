@@ -134,7 +134,7 @@ pub fn decompose_four_squares(n: u64) -> (u64, u64, u64, u64) {
             let mut a = 0;
             let mut b = 0;
             let mut p = 0;
-            while ((a % 2 == 0) == ((b % 2) == 0)) || !is_prime_64(p) {
+            while (a % 2 == b % 2) || !is_prime_64_faster(p) {
                 a = rng.gen_range(0..isqrt(n) + 1);
                 b = rng.gen_range(0..isqrt(n - a * a) + 1);
                 p = n - a * a - b * b;

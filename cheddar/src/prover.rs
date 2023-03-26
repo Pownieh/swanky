@@ -1,11 +1,12 @@
 use crate::square_decomp::decomposition::decompose_four_squares;
 use num_traits::pow;
-use ocelot::edabits::{FComProver, MacProver};
+use ocelot::edabits::{f2_to_fe, FComProver, MacProver};
 use ocelot::svole::wykw::LpnParams;
 use ocelot::Error;
 use rand::distributions::Uniform;
 use rand::{CryptoRng, Rng, SeedableRng};
-use scuttlebutt::field::F61p;
+use scuttlebutt::field::{F40b, F61p, FiniteField, F2};
+use scuttlebutt::ring::FiniteRing;
 use scuttlebutt::{AbstractChannel, AesRng};
 use std::ptr::eq;
 
@@ -13,6 +14,7 @@ const MODULUS: u64 = (1 << 61) - 1;
 
 pub struct RangeProver {
     pub fcom: FComProver<F61p>,
+    pub fcom_f2: FComProver<F40b>,
 }
 
 #[allow(non_snake_case)]
@@ -24,8 +26,13 @@ impl RangeProver {
         lpn_extend: LpnParams,
     ) -> Self {
         let prov: FComProver<F61p> = FComProver::init(channel, rng, lpn_setup, lpn_extend).unwrap();
+        let prov_f2 = FComProver::init(channel, rng, lpn_setup, lpn_extend).unwrap();
+
         println!("PROVER> Init");
-        Self { fcom: prov }
+        Self {
+            fcom: prov,
+            fcom_f2: prov_f2,
+        }
     }
 
     fn check_results(results: Vec<F61p>, bound: u64) -> Result<(), Error> {
@@ -43,16 +50,15 @@ impl RangeProver {
         channel: &mut C,
         rng: &mut RNG,
         xs: Vec<MacProver<F61p>>,
-        lower_bounds: Vec<u64>,
-        upper_bounds: Vec<u64>,
+        lower_bounds: &Vec<u64>,
+        upper_bounds: &Vec<u64>,
         iterations: usize,
+        (bound, slack): (u64, u64),
     ) {
+        // TODO: fix this slack
+        let slack = (slack as f64).log2().ceil() as usize;
         let seed = channel.read_block().unwrap();
         let mut vector_rng = AesRng::from_seed(seed);
-
-        //println!("c_vec={:?}", c_vec);
-
-        //let u = u64::from(x.0 .0);
 
         let mut doubles: Vec<(MacProver<F61p>, MacProver<F61p>)> =
             Vec::with_capacity(iterations * xs.len());
@@ -64,7 +70,26 @@ impl RangeProver {
 
         let mut results: Vec<MacProver<F61p>> = Vec::with_capacity(iterations);
 
-        for _ in 0..iterations {
+        let mut hiding_vals: Vec<Vec<F61p>> = vec![Vec::with_capacity(slack); iterations];
+        let mut hiding_macs: Vec<Vec<MacProver<F61p>>> =
+            vec![Vec::with_capacity(slack); iterations];
+
+        for i in 0..iterations {
+            for j in 0..slack {
+                let cm = f2_to_fe(F2::random(rng));
+                hiding_vals[i].push(cm);
+            }
+        }
+
+        // TODO: fix this slack
+        for i in 0..iterations {
+            hiding_macs[i] = self
+                .fcom
+                .input_with_macprover(channel, rng, &hiding_vals[i])
+                .unwrap();
+        }
+
+        for j in 0..iterations {
             let mut sum = 0u64;
             let mut decomposed_vals = Vec::with_capacity(xs.len() * 4);
             let mut decomposed_vals_squared: Vec<F61p> = Vec::with_capacity(xs.len() * 4);
@@ -93,8 +118,6 @@ impl RangeProver {
                     F61p(d) * F61p(d),
                 ]);
             }
-
-            // todo: prove the equality of the decomposed values and the x
 
             let out_decomposed = self
                 .fcom
@@ -149,13 +172,24 @@ impl RangeProver {
                 }
             }
 
-            let mut actual_val: i64 = res.0 .0 as i64;
-            if res.0 .0 > (MODULUS - 1) / 2 {
-                actual_val = (MODULUS - res.0 .0) as i64 * -1;
+            println!(
+                "The final value: {:?}, sum: {:?}",
+                res.0.compute_signed(),
+                sum
+            );
+
+            for k in 0..slack {
+                res = self.fcom.add(
+                    res,
+                    self.fcom
+                        .affine_mult_cst(pow(F61p(2), k as usize), hiding_macs[j][k as usize]),
+                )
             }
-            println!("The final value: {:?}, sum: {:?}", actual_val, sum);
+
             results.push(res);
         }
+        // TODO: Remember to hide the bits before opening
+        // TODO: Remember to do a bit decomposition to show that it fits, rather than just opening the value
         self.fcom.open(channel, &results).unwrap();
 
         self.fcom

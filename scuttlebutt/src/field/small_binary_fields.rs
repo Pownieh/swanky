@@ -172,6 +172,10 @@ macro_rules! small_binary_field {
                 }
                 self.pow_var_time((1 << <$num_bits as Unsigned>::U64) - 2)
             }
+
+            fn compute_signed(&self) -> i64 {
+                unimplemented!("not needed yet")
+            }
         }
         impl crate::ring::IsSubRingOf<$name> for F2 {}
         impl crate::field::IsSubFieldOf<$name> for F2 {

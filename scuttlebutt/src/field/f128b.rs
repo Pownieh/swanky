@@ -257,6 +257,10 @@ impl FiniteField for F128b {
         }
         self.pow_var_time(u128::MAX - 1)
     }
+
+    fn compute_signed(&self) -> i64 {
+        todo!()
+    }
 }
 
 impl From<F2> for F128b {
