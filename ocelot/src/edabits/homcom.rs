@@ -36,6 +36,12 @@ pub struct MacVerifier<FE: FiniteField>(
     pub FE,
 );
 
+impl<FE: FiniteField> Default for MacProver<FE> {
+    fn default() -> Self {
+        MacProver(FE::PrimeField::ZERO, FE::ZERO)
+    }
+}
+
 impl<FE: FiniteField> ConditionallySelectable for MacProver<FE> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         MacProver(

@@ -206,6 +206,10 @@ macro_rules! prime_field_using_ff {
                     internal: Internal::MULTIPLICATIVE_GENERATOR,
                 };
 
+                fn compute_signed(&self) -> i64 {
+                    unimplemented!("not needed yet")
+                }
+
                 type PrimeField = Self;
 
                 fn polynomial_modulus() -> Polynomial<Self::PrimeField> {
@@ -240,6 +244,8 @@ macro_rules! prime_field_using_ff {
                     self.internal.sub_assign(rhs.internal);
                 }
             }
+
+
 
             impl MulAssign<&$name> for $name {
                 fn mul_assign(&mut self, rhs: &$name) {

@@ -28,9 +28,16 @@ impl RangeVerifier {
         }
     }
 
-    fn check_results(&mut self, results: Vec<F61p>, bound: u64) -> Result<(), Error> {
+    fn check_results(
+        &mut self,
+        results: Vec<F61p>,
+        bound: u64,
+        mask_bit_size: u64,
+    ) -> Result<(), Error> {
+        let mask = pow(2, mask_bit_size as usize);
+
         for x in results {
-            if !(x.compute_signed() < bound as i64) {
+            if !(x.compute_signed() < mask + bound as i64) {
                 return Err(Error::Other("Prover fucked up".to_string()));
             }
         }
@@ -45,10 +52,8 @@ impl RangeVerifier {
         lower_bounds: &Vec<u64>,
         upper_bounds: &Vec<u64>,
         iterations: usize,
-        (bound, slack): (u64, u64),
+        (bound, mask, mask_bit_size): (u64, u64, u64),
     ) {
-        let slack = (slack as f64).log2().ceil() as usize;
-
         let seed = rng.gen::<Block>();
 
         let _ = channel.write_block(&seed).unwrap();
@@ -63,10 +68,13 @@ impl RangeVerifier {
         let mut equality_checks: Vec<MacVerifier<F61p>> = Vec::with_capacity(xs.len() * iterations);
 
         let mut hiding_macs: Vec<Vec<MacVerifier<F61p>>> =
-            vec![Vec::with_capacity(slack as usize); iterations];
+            vec![Vec::with_capacity(mask_bit_size as usize); iterations];
 
         for i in 0..iterations {
-            hiding_macs[i] = self.fcom.input(channel, rng, slack as usize).unwrap();
+            hiding_macs[i] = self
+                .fcom
+                .input(channel, rng, mask_bit_size as usize)
+                .unwrap();
         }
 
         for j in 0..iterations {
@@ -123,7 +131,7 @@ impl RangeVerifier {
                 }
             }
 
-            for k in 0..slack {
+            for k in 0..mask_bit_size {
                 res = self.fcom.add(
                     res,
                     self.fcom
@@ -136,7 +144,7 @@ impl RangeVerifier {
         let mut out: Vec<F61p> = Vec::with_capacity(iterations);
         self.fcom.open(channel, &results, &mut out).unwrap();
 
-        self.check_results(out, bound).unwrap();
+        self.check_results(out, bound, mask_bit_size).unwrap();
 
         self.fcom
             .quicksilver_check_multiply(channel, rng, &triples)

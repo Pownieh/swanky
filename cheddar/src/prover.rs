@@ -1,5 +1,5 @@
 use crate::square_decomp::decomposition::decompose_four_squares;
-use num_traits::pow;
+use num_traits::{pow, zero};
 use ocelot::edabits::{f2_to_fe, FComProver, MacProver};
 use ocelot::svole::wykw::LpnParams;
 use ocelot::Error;
@@ -9,6 +9,7 @@ use scuttlebutt::field::{F40b, F61p, FiniteField, F2};
 use scuttlebutt::ring::FiniteRing;
 use scuttlebutt::{AbstractChannel, AesRng};
 use std::ptr::eq;
+use std::time::{Duration, Instant};
 
 const MODULUS: u64 = (1 << 61) - 1;
 
@@ -45,7 +46,13 @@ impl RangeProver {
         Ok(())
     }
 
-    pub fn prove_range<C: AbstractChannel, RNG: CryptoRng + Rng>(
+    pub fn prove_range<
+        C: AbstractChannel,
+        RNG: CryptoRng + Rng,
+        const N: usize,
+        const PROD: usize, // iterations * N
+        const C_VEC: usize,
+    >(
         &mut self,
         channel: &mut C,
         rng: &mut RNG,
@@ -53,29 +60,34 @@ impl RangeProver {
         lower_bounds: &Vec<u64>,
         upper_bounds: &Vec<u64>,
         iterations: usize,
-        (bound, slack): (u64, u64),
-    ) {
-        // TODO: fix this slack
-        let slack = (slack as f64).log2().ceil() as usize;
+        (bound, mask, mask_bit_size): (u64, u64, u64),
+    ) -> Duration {
         let seed = channel.read_block().unwrap();
         let mut vector_rng = AesRng::from_seed(seed);
 
-        let mut doubles: Vec<(MacProver<F61p>, MacProver<F61p>)> =
-            Vec::with_capacity(iterations * xs.len());
+        let mut doubles: [(MacProver<F61p>, MacProver<F61p>); PROD] =
+            [(MacProver::default(), MacProver::default()); PROD];
 
+        /*let mut triples: [(MacProver<F61p>, MacProver<F61p>, MacProver<F61p>); MORE_PROD] = [(
+            MacProver::default(),
+            MacProver::default(),
+            MacProver::default(),
+        );
+            MORE_PROD];*/
         let mut triples: Vec<(MacProver<F61p>, MacProver<F61p>, MacProver<F61p>)> =
-            Vec::with_capacity(iterations * xs.len()); // todo: fix the size of this thing to also include the squares
+            Vec::with_capacity(5 * xs.len() * iterations);
 
         let mut equality_checks: Vec<MacProver<F61p>> = Vec::with_capacity(xs.len() * iterations);
 
         let mut results: Vec<MacProver<F61p>> = Vec::with_capacity(iterations);
 
-        let mut hiding_vals: Vec<Vec<F61p>> = vec![Vec::with_capacity(slack); iterations];
+        let mut hiding_vals: Vec<Vec<F61p>> =
+            vec![Vec::with_capacity(mask_bit_size as usize); iterations];
         let mut hiding_macs: Vec<Vec<MacProver<F61p>>> =
-            vec![Vec::with_capacity(slack); iterations];
+            vec![Vec::with_capacity(mask_bit_size as usize); iterations];
 
         for i in 0..iterations {
-            for j in 0..slack {
+            for j in 0..mask_bit_size {
                 let cm = f2_to_fe(F2::random(rng));
                 hiding_vals[i].push(cm);
             }
@@ -89,26 +101,37 @@ impl RangeProver {
                 .unwrap();
         }
 
+        let mut computing_ranges = Duration::ZERO;
+
+        /*let mut c_vec: [i8; C_VEC] = [0i8; C_VEC];
+        for i in 0..C_VEC {
+            c_vec[i] = (vector_rng.sample::<i8, _>(Uniform::new(-1, 2)));
+        }*/
+
         for j in 0..iterations {
             let mut sum = 0u64;
             let mut decomposed_vals = Vec::with_capacity(xs.len() * 4);
             let mut decomposed_vals_squared: Vec<F61p> = Vec::with_capacity(xs.len() * 4);
             let mut combined_bounds: Vec<F61p> = Vec::with_capacity(xs.len());
 
-            let mut c_vec: Vec<i8> = Vec::with_capacity(xs.len());
-            for _ in 0..(xs.len() * 4) {
-                c_vec.push(vector_rng.sample::<i8, _>(Uniform::new(-1, 2)));
+            let mut c_vec: [i8; C_VEC] = [0i8; C_VEC];
+            for i in 0..C_VEC {
+                c_vec[i] = (vector_rng.sample::<i8, _>(Uniform::new(-1, 2)));
             }
+
             for i in 0..xs.len() {
                 let x_minus_l = self.fcom.affine_add_cst(-F61p(lower_bounds[i]), xs[i]);
                 let u_minus_x = self
                     .fcom
                     .affine_add_cst(F61p(upper_bounds[i]), self.fcom.neg(xs[i]));
-                doubles.push((x_minus_l, u_minus_x));
+                doubles[(j * xs.len()) + i] = (x_minus_l, u_minus_x);
                 let val_to_prove = x_minus_l.0 * u_minus_x.0;
                 combined_bounds.push(val_to_prove);
+                let start = Instant::now();
                 let (a, b, c, d) = decompose_four_squares(val_to_prove.0);
-                assert_eq!(a * a + b * b + c * c + d * d, val_to_prove.0);
+                computing_ranges += start.elapsed();
+                //assert_eq!(a * a + b * b + c * c + d * d, val_to_prove.0);
+                //println!("{:?}, {:?}, {:?}, {:?}", a, b, c, d);
                 sum += a + b + c + d;
                 decomposed_vals.extend(vec![F61p(a), F61p(b), F61p(c), F61p(d)]);
                 decomposed_vals_squared.extend(vec![
@@ -156,18 +179,22 @@ impl RangeProver {
             }
 
             let mut res: MacProver<F61p>;
-            if c_vec[0] == -1 {
+            //let zeroth = c_vec[j * out_decomposed.len()];
+            let zeroth = c_vec[0];
+            if zeroth == -1 {
                 res = self.fcom.neg(out_decomposed[0]);
-            } else if c_vec[0] == 1 {
+            } else if zeroth == 1 {
                 res = out_decomposed[0];
             } else {
                 res = self.fcom.sub(out_decomposed[0], out_decomposed[0]);
             }
 
             for i in 1..out_decomposed.len() {
-                if c_vec[i] == -1 {
+                //let idx = c_vec[(j * out_decomposed.len()) + i];
+                let idx = c_vec[i];
+                if idx == -1 {
                     res = self.fcom.sub(res, out_decomposed[i]);
-                } else if c_vec[i] == 1 {
+                } else if idx == 1 {
                     res = self.fcom.add(res, out_decomposed[i]);
                 }
             }
@@ -178,7 +205,7 @@ impl RangeProver {
                 sum
             );
 
-            for k in 0..slack {
+            for k in 0..mask_bit_size {
                 res = self.fcom.add(
                     res,
                     self.fcom
@@ -192,10 +219,13 @@ impl RangeProver {
         // TODO: Remember to do a bit decomposition to show that it fits, rather than just opening the value
         self.fcom.open(channel, &results).unwrap();
 
+        println!("triples len: {:?}", triples.len());
         self.fcom
             .quicksilver_check_multiply(channel, rng, &triples)
             .unwrap();
 
         self.fcom.check_zero(channel, &equality_checks).unwrap();
+
+        computing_ranges
     }
 }
