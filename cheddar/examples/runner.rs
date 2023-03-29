@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use serde_json;
 
-const N: usize = 10_000;
+const N: usize = 2_000;
 const STAT_SEC: usize = 40;
 const PROD: usize = N * STAT_SEC;
 const C_VEC: usize = N * 4;
@@ -41,7 +41,6 @@ fn compute_bound() -> (u64, u64, u64) {
 struct StatTuple {
     pub n: usize,
     pub ns_avg: f64,
-    pub ns_avg_per_inner_iteration: f64,
     pub ns_avg_element: f64,
 }
 
@@ -72,13 +71,11 @@ impl RuntimeStats {
     fn analyse_times(times: &Vec<Duration>, elements: usize) -> StatTuple {
         let total_time: u128 = times.iter().map(|d| d.as_nanos()).sum();
         let average_iteration: f64 = total_time as f64 / times.len() as f64;
-        let average_per_inner_iteration: f64 = average_iteration as f64 / STAT_SEC as f64;
-        let average_per_element: f64 = average_per_inner_iteration / elements as f64;
+        let average_per_element: f64 = average_iteration / elements as f64;
 
         StatTuple {
             n: elements,
             ns_avg: average_iteration,
-            ns_avg_per_inner_iteration: average_per_inner_iteration,
             ns_avg_element: average_per_element,
         }
     }

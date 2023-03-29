@@ -77,43 +77,42 @@ impl RangeVerifier {
                 .unwrap();
         }
 
-        for j in 0..iterations {
-            let out_decomposed = self.fcom.input(channel, rng, xs.len() * 4).unwrap();
-            let out_squares = self.fcom.input(channel, rng, xs.len() * 4).unwrap();
-            let out_bounds = self.fcom.input(channel, rng, xs.len()).unwrap();
+        let out_decomposed = self.fcom.input(channel, rng, xs.len() * 4).unwrap();
+        let out_squares = self.fcom.input(channel, rng, xs.len() * 4).unwrap();
+        let out_bounds = self.fcom.input(channel, rng, xs.len()).unwrap();
 
-            let mut c_vec: Vec<i8> = Vec::with_capacity(4);
+        for i in 0..xs.len() {
+            // flip lower_bound to become a negative: F61p(lb[i]) - modulus
+            let x_minus_l = self.fcom.affine_add_cst(-F61p(lower_bounds[i]), xs[i]);
+            let u_minus_x = self
+                .fcom
+                .affine_add_cst(F61p(upper_bounds[i]), self.fcom.neg(xs[i]));
+            triples.push((x_minus_l, u_minus_x, out_bounds[i]));
+
+            let mut right_side = out_squares[i * 4];
+            triples.push((
+                out_decomposed[i * 4],
+                out_decomposed[i * 4],
+                out_squares[i * 4],
+            ));
+            for j in 1..4 {
+                triples.push((
+                    out_decomposed[i * 4 + j],
+                    out_decomposed[i * 4 + j],
+                    out_squares[i * 4 + j],
+                ));
+
+                right_side = self.fcom.add(right_side, out_squares[i * 4 + j]);
+            }
+
+            equality_checks.push(self.fcom.sub(out_bounds[i], right_side));
+        }
+
+        for j in 0..iterations {
+            let mut c_vec: Vec<i8> = Vec::with_capacity(xs.len() * 4);
             for _ in 0..(xs.len() * 4) {
                 c_vec.push(vector_rng.sample::<i8, _>(Uniform::new(-1, 2)));
             }
-
-            for i in 0..xs.len() {
-                // flip lower_bound to become a negative: F61p(lb[i]) - modulus
-                let x_minus_l = self.fcom.affine_add_cst(-F61p(lower_bounds[i]), xs[i]);
-                let u_minus_x = self
-                    .fcom
-                    .affine_add_cst(F61p(upper_bounds[i]), self.fcom.neg(xs[i]));
-                triples.push((x_minus_l, u_minus_x, out_bounds[i]));
-
-                let mut right_side = out_squares[i * 4];
-                triples.push((
-                    out_decomposed[i * 4],
-                    out_decomposed[i * 4],
-                    out_squares[i * 4],
-                ));
-                for j in 1..4 {
-                    triples.push((
-                        out_decomposed[i * 4 + j],
-                        out_decomposed[i * 4 + j],
-                        out_squares[i * 4 + j],
-                    ));
-
-                    right_side = self.fcom.add(right_side, out_squares[i * 4 + j]);
-                }
-
-                equality_checks.push(self.fcom.sub(out_bounds[i], right_side));
-            }
-
             let mut res: MacVerifier<F61p>;
             if c_vec[0] == -1 {
                 res = self.fcom.neg(out_decomposed[0]);

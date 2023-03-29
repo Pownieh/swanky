@@ -65,8 +65,8 @@ impl RangeProver {
         let seed = channel.read_block().unwrap();
         let mut vector_rng = AesRng::from_seed(seed);
 
-        let mut doubles: [(MacProver<F61p>, MacProver<F61p>); PROD] =
-            [(MacProver::default(), MacProver::default()); PROD];
+        let mut doubles: [(MacProver<F61p>, MacProver<F61p>); N] =
+            [(MacProver::default(), MacProver::default()); N];
 
         /*let mut triples: [(MacProver<F61p>, MacProver<F61p>, MacProver<F61p>); MORE_PROD] = [(
             MacProver::default(),
@@ -75,7 +75,7 @@ impl RangeProver {
         );
             MORE_PROD];*/
         let mut triples: Vec<(MacProver<F61p>, MacProver<F61p>, MacProver<F61p>)> =
-            Vec::with_capacity(5 * xs.len() * iterations);
+            Vec::with_capacity(5 * xs.len());
 
         let mut equality_checks: Vec<MacProver<F61p>> = Vec::with_capacity(xs.len() * iterations);
 
@@ -93,7 +93,7 @@ impl RangeProver {
             }
         }
 
-        // TODO: fix this slack
+        // TODO: prove these are bits
         for i in 0..iterations {
             hiding_macs[i] = self
                 .fcom
@@ -102,80 +102,74 @@ impl RangeProver {
         }
 
         let mut computing_ranges = Duration::ZERO;
+        let mut sum = 0u64;
+        let mut decomposed_vals = Vec::with_capacity(xs.len() * 4);
+        let mut decomposed_vals_squared: Vec<F61p> = Vec::with_capacity(xs.len() * 4);
+        let mut combined_bounds: Vec<F61p> = Vec::with_capacity(xs.len());
 
-        /*let mut c_vec: [i8; C_VEC] = [0i8; C_VEC];
-        for i in 0..C_VEC {
-            c_vec[i] = (vector_rng.sample::<i8, _>(Uniform::new(-1, 2)));
-        }*/
+        for i in 0..xs.len() {
+            let x_minus_l = self.fcom.affine_add_cst(-F61p(lower_bounds[i]), xs[i]);
+            let u_minus_x = self
+                .fcom
+                .affine_add_cst(F61p(upper_bounds[i]), self.fcom.neg(xs[i]));
+            doubles[i] = (x_minus_l, u_minus_x);
+            let val_to_prove = x_minus_l.0 * u_minus_x.0;
+            combined_bounds.push(val_to_prove);
+            let start = Instant::now();
+            let (a, b, c, d) = decompose_four_squares(val_to_prove.0);
+            computing_ranges += start.elapsed();
+            //assert_eq!(a * a + b * b + c * c + d * d, val_to_prove.0);
+            //println!("{:?}, {:?}, {:?}, {:?}", a, b, c, d);
+            sum += a + b + c + d;
+            decomposed_vals.extend(vec![F61p(a), F61p(b), F61p(c), F61p(d)]);
+            decomposed_vals_squared.extend(vec![
+                F61p(a) * F61p(a),
+                F61p(b) * F61p(b),
+                F61p(c) * F61p(c),
+                F61p(d) * F61p(d),
+            ]);
+        }
+
+        let out_decomposed = self
+            .fcom
+            .input_with_macprover(channel, rng, &decomposed_vals)
+            .unwrap();
+
+        let out_squares = self
+            .fcom
+            .input_with_macprover(channel, rng, &decomposed_vals_squared)
+            .unwrap();
+
+        let out_bounds = self
+            .fcom
+            .input_with_macprover(channel, rng, &combined_bounds)
+            .unwrap();
+
+        for i in 0..out_bounds.len() {
+            triples.push((doubles[i].0, doubles[i].1, out_bounds[i]));
+            let mut right_side = out_squares[i * 4];
+            triples.push((
+                out_decomposed[i * 4],
+                out_decomposed[i * 4],
+                out_squares[i * 4],
+            ));
+            for j in 1..4 {
+                triples.push((
+                    out_decomposed[i * 4 + j],
+                    out_decomposed[i * 4 + j],
+                    out_squares[i * 4 + j],
+                ));
+
+                right_side = self.fcom.add(right_side, out_squares[i * 4 + j]);
+            }
+
+            equality_checks.push(self.fcom.sub(out_bounds[i], right_side));
+        }
 
         for j in 0..iterations {
-            let mut sum = 0u64;
-            let mut decomposed_vals = Vec::with_capacity(xs.len() * 4);
-            let mut decomposed_vals_squared: Vec<F61p> = Vec::with_capacity(xs.len() * 4);
-            let mut combined_bounds: Vec<F61p> = Vec::with_capacity(xs.len());
-
             let mut c_vec: [i8; C_VEC] = [0i8; C_VEC];
             for i in 0..C_VEC {
                 c_vec[i] = (vector_rng.sample::<i8, _>(Uniform::new(-1, 2)));
-            }
-
-            for i in 0..xs.len() {
-                let x_minus_l = self.fcom.affine_add_cst(-F61p(lower_bounds[i]), xs[i]);
-                let u_minus_x = self
-                    .fcom
-                    .affine_add_cst(F61p(upper_bounds[i]), self.fcom.neg(xs[i]));
-                doubles[(j * xs.len()) + i] = (x_minus_l, u_minus_x);
-                let val_to_prove = x_minus_l.0 * u_minus_x.0;
-                combined_bounds.push(val_to_prove);
-                let start = Instant::now();
-                let (a, b, c, d) = decompose_four_squares(val_to_prove.0);
-                computing_ranges += start.elapsed();
-                //assert_eq!(a * a + b * b + c * c + d * d, val_to_prove.0);
-                //println!("{:?}, {:?}, {:?}, {:?}", a, b, c, d);
-                sum += a + b + c + d;
-                decomposed_vals.extend(vec![F61p(a), F61p(b), F61p(c), F61p(d)]);
-                decomposed_vals_squared.extend(vec![
-                    F61p(a) * F61p(a),
-                    F61p(b) * F61p(b),
-                    F61p(c) * F61p(c),
-                    F61p(d) * F61p(d),
-                ]);
-            }
-
-            let out_decomposed = self
-                .fcom
-                .input_with_macprover(channel, rng, &decomposed_vals)
-                .unwrap();
-
-            let out_squares = self
-                .fcom
-                .input_with_macprover(channel, rng, &decomposed_vals_squared)
-                .unwrap();
-
-            let out_bounds = self
-                .fcom
-                .input_with_macprover(channel, rng, &combined_bounds)
-                .unwrap();
-
-            for i in 0..out_bounds.len() {
-                triples.push((doubles[i].0, doubles[i].1, out_bounds[i]));
-                let mut right_side = out_squares[i * 4];
-                triples.push((
-                    out_decomposed[i * 4],
-                    out_decomposed[i * 4],
-                    out_squares[i * 4],
-                ));
-                for j in 1..4 {
-                    triples.push((
-                        out_decomposed[i * 4 + j],
-                        out_decomposed[i * 4 + j],
-                        out_squares[i * 4 + j],
-                    ));
-
-                    right_side = self.fcom.add(right_side, out_squares[i * 4 + j]);
-                }
-
-                equality_checks.push(self.fcom.sub(out_bounds[i], right_side));
             }
 
             let mut res: MacProver<F61p>;
@@ -199,11 +193,11 @@ impl RangeProver {
                 }
             }
 
-            println!(
+            /*println!(
                 "The final value: {:?}, sum: {:?}",
                 res.0.compute_signed(),
                 sum
-            );
+            );*/
 
             for k in 0..mask_bit_size {
                 res = self.fcom.add(
