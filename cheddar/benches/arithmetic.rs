@@ -2,7 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughpu
 use rand;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use square_decomp::arithmetic::{montgomery_mulmod, montgomery_powmod, mulmod, powmod};
+use square_decomp::square_decomp::arithmetic::{
+    montgomery_mulmod, montgomery_powmod, mulmod, powmod,
+};
 
 fn bench_mulmod_64(c: &mut Criterion) {
     let size = 1_000;

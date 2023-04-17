@@ -2,7 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughpu
 use rand;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use square_decomp::decomposition::{decompose_four_squares, decompose_three_squares_rs};
+use square_decomp::square_decomp::decomposition::{
+    decompose_four_squares, decompose_three_squares_rs,
+};
 
 fn bench_decompose_three_squares(c: &mut Criterion) {
     let size = 1_000;

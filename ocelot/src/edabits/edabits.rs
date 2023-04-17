@@ -7,7 +7,7 @@ use rand::{CryptoRng, Rng, SeedableRng};
 use scuttlebutt::{
     field::{F40b, FiniteField, F2},
     ring::FiniteRing,
-    AbstractChannel, AesRng, Block, SyncChannel,
+    AbstractChannel, AesRng, Block, SyncChannel, TrackChannel,
 };
 use std::io::{BufReader, BufWriter};
 use std::net::TcpStream;
@@ -332,7 +332,7 @@ impl<FE: FiniteField<PrimeField = FE>> ProverConv<FE> {
     /// generate random edabits
     pub fn random_edabits<C: AbstractChannel, RNG: CryptoRng + Rng>(
         &mut self,
-        channel: &mut C,
+        channel: &mut TrackChannel<C>,
         rng: &mut RNG,
         nb_bits: usize,
         num: usize, // in the paper: NB + C
@@ -353,8 +353,14 @@ impl<FE: FiniteField<PrimeField = FE>> ProverConv<FE> {
             aux_r_m.push(r_m);
         }
 
+        channel.clear();
         let aux_r_m_mac: Vec<FE> = self.fcom.input(channel, rng, &aux_r_m)?;
-
+        println!(
+            "PROVER> Communication from inputting {:?} elements> written: {:?}Kb, read: {:?}Kb",
+            aux_r_m.len(),
+            channel.kilobytes_written(),
+            channel.kilobytes_read()
+        );
         let mut i = 0;
         for aux_bits in aux_bits.into_iter() {
             edabits_vec.push(EdabitsProver {
@@ -670,7 +676,7 @@ impl<FE: FiniteField<PrimeField = FE>> ProverConv<FE> {
     /// conversion checking
     pub fn conv<C: AbstractChannel, RNG: CryptoRng + Rng>(
         &mut self,
-        channel: &mut C,
+        channel: &mut TrackChannel<C>,
         rng: &mut RNG,
         num_bucket: usize,
         num_cut: usize,
@@ -1478,7 +1484,7 @@ mod tests {
     use scuttlebutt::ring::FiniteRing;
     use scuttlebutt::{
         field::{F61p, FiniteField, F2},
-        AesRng, Channel,
+        AesRng, Channel, TrackChannel,
     };
     use std::{
         io::{BufReader, BufWriter},
@@ -1682,7 +1688,7 @@ mod tests {
 
     fn test_fdabit<FE: FiniteField<PrimeField = FE>>() -> () {
         let count = 100;
-        let (sender, receiver) = UnixStream::pair().unwrap();
+        let (sender, receiver) = TrackChannel::pair().unwrap();
         let handle = std::thread::spawn(move || {
             let mut rng = AesRng::new();
             let reader = BufReader::new(sender.try_clone().unwrap());

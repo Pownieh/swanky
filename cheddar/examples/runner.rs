@@ -1,3 +1,4 @@
+use num_traits::pow;
 use ocelot::svole::wykw::{
     LpnParams, LPN_EXTEND_MEDIUM, LPN_EXTEND_SMALL, LPN_SETUP_MEDIUM, LPN_SETUP_SMALL,
 };
@@ -13,12 +14,19 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use serde_json;
 
+// todo: something is completely off with the numbers. Look at last run
+// the ones that break are above the mask_bit_size, so they can't be masked.
+
 const N: usize = 2_000;
-const STAT_SEC: usize = 40;
+const STAT_SEC: usize = 50;
 const PROD: usize = N * STAT_SEC;
 const C_VEC: usize = N * 4;
 // todo: C_VEC SIZE = 4 * N
 const MODULUS: u64 = (1 << 61) - 1;
+
+const VAL_BOUNDS: [u64; 2] = [4000, 5000];
+const LOWER_BOUNDS: [u64; 2] = [2000, 3000];
+const UPPER_BOUNDS: [u64; 2] = [6000, 7000];
 
 fn compute_bound() -> (u64, u64, u64) {
     // bound = sqrt(p) / (39 * sqrt(4m) + 4))
@@ -31,10 +39,38 @@ fn compute_bound() -> (u64, u64, u64) {
     // our number is really below twice that.
 
     let bound = f64::ceil(numerator / denominator) as u64;
-    let mask = bound;
-    let mask_bit_size = f64::ceil((mask as f64).log2());
 
-    return (bound, mask, mask_bit_size as u64);
+    /* todo: since we are now adding much more than the bound, do we allow the value to potentially go very negative, since we push it above 0?
+        does this allow the prover to cheat if a lot of the random values are -1? We probably need a sign bit :(
+        giving a hidden bit means both proving it's actually a bit, committing to it as well as computing the multiplication
+
+        We can't multiply with -1, what happens if we send 0/1 and then multiply this value with bound
+        so that if the value is negative, P sends 1 and adds the result to res. Otherwise P sends 0, which
+        adds 0 to res now. Can P use this to cheat? If the value is already positive, it will
+        likely not be representable by the bits anymore.
+
+        Now, if res is already too large, P can make it overflow, but then adding the resulting stuff
+        to fill the bitlength, won't make it loop again, so now the number is very negative.
+        Other avenue is to have the value be too negative. Now, adding the bound + the buffer, can actually
+        make it go positive and thus work. Welp. We need to solve this problem :(
+
+        Can we add 2*res to res, if b = 1? This is equivalent to multiplying with -1, but it'll end up costing
+        one multiplication PER output (of which there are s, usually 40 or 50). So if we do
+        res' = res + (-2 * res), we get res' = |res|. We only do this res < 0. This does not require
+        two multiplications, since -2 is just a constant. What happens if P cheats here and let
+        b = 1 but res > 0. Now we get r' = res + (-2 * res) so this becomes -res instead and can no longer
+        be represented. What if it's too large though and P does this? It just becomes very negative.
+        If it's negative, since we compute the absolute value, it could technically overflow when we add
+        the buffer? Nope, since we have negatives after the positives, it becomes very negative instead?
+
+    */
+    // compute the buffer to the nearest power of two for cleaner proof (note, closest to 2 * bound)
+    let mask_bit_size = f64::ceil((bound as f64).log2());
+
+    let buffer = pow(2, mask_bit_size as usize) - bound;
+    let mask = bound + buffer;
+
+    return (bound, buffer, mask_bit_size as u64);
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -166,11 +202,15 @@ fn run(iterations: usize) {
 
     for _ in 0..N {
         inp_vec.push(F61p(
-            sampling_rng.sample::<u64, _>(Uniform::new(10000, 15000)),
+            sampling_rng.sample::<u64, _>(Uniform::new(VAL_BOUNDS[0], VAL_BOUNDS[1])),
         ));
-        lower_bounds.push(sampling_rng.sample::<u64, _>(Uniform::new(5000, 6000)));
-        upper_bounds.push(sampling_rng.sample::<u64, _>(Uniform::new(16000, 17000)));
+        lower_bounds
+            .push(sampling_rng.sample::<u64, _>(Uniform::new(LOWER_BOUNDS[0], LOWER_BOUNDS[1])));
+        upper_bounds
+            .push(sampling_rng.sample::<u64, _>(Uniform::new(UPPER_BOUNDS[0], UPPER_BOUNDS[1])));
     }
+
+    //inp_vec[10] = F61p(upper_bounds[1] + 2);
 
     let verifier_lower = lower_bounds.clone();
     let verifier_upper = upper_bounds.clone();

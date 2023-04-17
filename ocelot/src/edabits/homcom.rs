@@ -42,6 +42,12 @@ impl<FE: FiniteField> Default for MacProver<FE> {
     }
 }
 
+impl<FE: FiniteField> Default for MacVerifier<FE> {
+    fn default() -> Self {
+        MacVerifier(FE::ZERO)
+    }
+}
+
 impl<FE: FiniteField> ConditionallySelectable for MacProver<FE> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         MacProver(

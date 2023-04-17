@@ -9,7 +9,7 @@ type Verifier = VerifierConv<F61p>;
 fn run() {
     let (mut sender, mut receiver) = track_unix_channel_pair();
     let nb_bits: usize = 60;
-    let n = 10_000;
+    let n = 2_000;
     let num_bucket = 5;
     let num_cut = num_bucket;
     let with_quicksilver = true;
@@ -46,7 +46,7 @@ fn run() {
         println!("Send time (conv): {:?}", end);
         println!(
             "Send time (conv) average: {:?}",
-            end.as_nanos() as f64 / 1000_000 as f64
+            end.as_nanos() as f64 / n as f64
         );
     });
     #[cfg(target_os = "linux")]

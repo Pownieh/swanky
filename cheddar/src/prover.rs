@@ -46,6 +46,20 @@ impl RangeProver {
         Ok(())
     }
 
+    fn compute_bit_decomposition(&mut self, x: F61p, size: usize) -> Vec<F61p> {
+        let mut val = x.0;
+
+        // all uneven integers are 1 off lol, so a lot of the equality checks fail.. fix lol
+
+        let mut res = Vec::with_capacity(size);
+        for _ in 0..size {
+            res.push(if val & 1 == 1 { F61p::ONE } else { F61p::ZERO });
+            val = val >> 1;
+        }
+        // println!("x: {:?}, bit_decomp in bits: {:?}", x, res);
+        return res;
+    }
+
     pub fn prove_range<
         C: AbstractChannel,
         RNG: CryptoRng + Rng,
@@ -60,7 +74,7 @@ impl RangeProver {
         lower_bounds: &Vec<u64>,
         upper_bounds: &Vec<u64>,
         iterations: usize,
-        (bound, mask, mask_bit_size): (u64, u64, u64),
+        (bound, buffer, mask_bit_size): (u64, u64, u64),
     ) -> Duration {
         let seed = channel.read_block().unwrap();
         let mut vector_rng = AesRng::from_seed(seed);
@@ -80,26 +94,6 @@ impl RangeProver {
         let mut equality_checks: Vec<MacProver<F61p>> = Vec::with_capacity(xs.len() * iterations);
 
         let mut results: Vec<MacProver<F61p>> = Vec::with_capacity(iterations);
-
-        let mut hiding_vals: Vec<Vec<F61p>> =
-            vec![Vec::with_capacity(mask_bit_size as usize); iterations];
-        let mut hiding_macs: Vec<Vec<MacProver<F61p>>> =
-            vec![Vec::with_capacity(mask_bit_size as usize); iterations];
-
-        for i in 0..iterations {
-            for j in 0..mask_bit_size {
-                let cm = f2_to_fe(F2::random(rng));
-                hiding_vals[i].push(cm);
-            }
-        }
-
-        // TODO: prove these are bits
-        for i in 0..iterations {
-            hiding_macs[i] = self
-                .fcom
-                .input_with_macprover(channel, rng, &hiding_vals[i])
-                .unwrap();
-        }
 
         let mut computing_ranges = Duration::ZERO;
         let mut sum = 0u64;
@@ -166,6 +160,9 @@ impl RangeProver {
             equality_checks.push(self.fcom.sub(out_bounds[i], right_side));
         }
 
+        let mut bit_decompositions: Vec<F61p> = Vec::with_capacity(iterations * 6);
+
+        // Compute the inner product thing
         for j in 0..iterations {
             let mut c_vec: [i8; C_VEC] = [0i8; C_VEC];
             for i in 0..C_VEC {
@@ -199,16 +196,67 @@ impl RangeProver {
                 sum
             );*/
 
-            for k in 0..mask_bit_size {
-                res = self.fcom.add(
-                    res,
-                    self.fcom
-                        .affine_mult_cst(pow(F61p(2), k as usize), hiding_macs[j][k as usize]),
-                )
+            // todo: Do this in a batch lol
+            let mut sign_bit = Vec::with_capacity(1);
+            if res.0.compute_signed() < 0 {
+                sign_bit = self
+                    .fcom
+                    .input_with_macprover(channel, rng, &[F61p::ONE])
+                    .unwrap();
+            } else {
+                sign_bit = self
+                    .fcom
+                    .input_with_macprover(channel, rng, &[F61p::ZERO])
+                    .unwrap();
             }
+
+            let x = self.fcom.affine_mult_cst(-F61p(2), res);
+            let adder = sign_bit[0].0 * x.0;
+            let adder_m = self
+                .fcom
+                .input_with_macprover(channel, rng, &[adder])
+                .unwrap();
+
+            triples.push((sign_bit[0], x, adder_m[0]));
+
+            res = self.fcom.add(adder_m[0], res);
+            res = self.fcom.affine_add_cst(F61p(buffer), res);
+
+            bit_decompositions
+                .extend(&self.compute_bit_decomposition(res.0, mask_bit_size as usize));
 
             results.push(res);
         }
+
+        let bit_decomposition_macs = self
+            .fcom
+            .input_with_macprover(channel, rng, &bit_decompositions)
+            .unwrap();
+
+        // prove that this bit_decomposition stuff is actually bits
+        let mut length_checks: Vec<MacProver<F61p>> = Vec::with_capacity(iterations);
+        for i in 0..iterations {
+            let mut res = Default::default();
+            for k in 0..mask_bit_size {
+                if k == 0 {
+                    res = self.fcom.affine_mult_cst(
+                        pow(F61p(2), k as usize),
+                        bit_decomposition_macs[i * mask_bit_size as usize + k as usize],
+                    );
+                    continue;
+                }
+                res = self.fcom.add(
+                    res,
+                    self.fcom.affine_mult_cst(
+                        pow(F61p(2), k as usize),
+                        bit_decomposition_macs[i * mask_bit_size as usize + k as usize],
+                    ),
+                )
+            }
+            // println!("result: {:?}, bit_decomp: {:?}", results[i], res);
+            length_checks.push(self.fcom.sub(results[i], res));
+        }
+
         // TODO: Remember to hide the bits before opening
         // TODO: Remember to do a bit decomposition to show that it fits, rather than just opening the value
         self.fcom.open(channel, &results).unwrap();
@@ -218,6 +266,7 @@ impl RangeProver {
             .quicksilver_check_multiply(channel, rng, &triples)
             .unwrap();
 
+        equality_checks.append(&mut length_checks);
         self.fcom.check_zero(channel, &equality_checks).unwrap();
 
         computing_ranges
