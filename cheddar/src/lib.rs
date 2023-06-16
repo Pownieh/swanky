@@ -1,5 +1,7 @@
 #![feature(bigint_helper_methods)]
 
-pub mod prover;
+mod traits;
+pub use traits::{RangeProver, RangeVerifier};
+
+pub mod four_squares;
 pub mod square_decomp;
-pub mod verifier;
