@@ -18,7 +18,8 @@ use subtle::{ConditionallySelectable, ConstantTimeEq};
 #[derive(Clone)]
 pub struct EdabitsProver<FE: FiniteField> {
     bits: Vec<MacProver<F40b>>,
-    value: MacProver<FE>,
+    /// prover val and key for edabit
+    pub value: MacProver<FE>,
 }
 
 fn copy_edabits_prover<FE: FiniteField>(edabits: &EdabitsProver<FE>) -> EdabitsProver<FE> {
@@ -37,7 +38,8 @@ fn copy_edabits_prover<FE: FiniteField>(edabits: &EdabitsProver<FE>) -> EdabitsP
 #[derive(Clone)]
 pub struct EdabitsVerifier<FE: FiniteField> {
     bits: Vec<MacVerifier<F40b>>,
-    value: MacVerifier<FE>,
+    /// verifier key of edabit
+    pub value: MacVerifier<FE>,
 }
 
 fn copy_edabits_verifier<FE: FiniteField>(edabits: &EdabitsVerifier<FE>) -> EdabitsVerifier<FE> {
@@ -156,7 +158,8 @@ fn check_parameters<FE: FiniteField>(n: usize, gamma: usize) -> Result<(), Error
 /// Prover for the edabits conversion protocol
 pub struct ProverConv<FE: FiniteField> {
     fcom_f2: FComProver<F40b>,
-    fcom: FComProver<FE>,
+    /// fcom_prover
+    pub fcom: FComProver<FE>,
 }
 
 // The Finite field is required to be a prime field because of the fdabit
@@ -826,12 +829,93 @@ impl<FE: FiniteField<PrimeField = FE>> ProverConv<FE> {
 
         Ok(())
     }
+
+    /// truncation checking
+    pub fn truncate<C: AbstractChannel, RNG: CryptoRng + Rng>(
+        &mut self,
+        channel: &mut C,
+        rng: &mut RNG,
+        x: &EdabitsProver<FE>,
+        truncate_by: usize,
+    ) -> (EdabitsProver<FE>, EdabitsProver<FE>, MacProver<FE>) {
+        let x_bits = &(x.bits);
+
+        // compute the val and bits that are truncated away
+        let mut trunc_away_bits: Vec<F2> = Vec::with_capacity(truncate_by);
+        let mut x_truncated_away: FE::PrimeField = FE::PrimeField::ZERO;
+        let mut twos = FE::PrimeField::ONE;
+        for i in 0..truncate_by {
+            if x_bits[i].0 == F2::ONE {
+                // x_truncated contains what is truncated AWAY
+                x_truncated_away += twos;
+            }
+            twos += twos;
+            trunc_away_bits.push(x_bits[i].0);
+        }
+        let trunc_twos = twos;
+        // this is the value that is left, when removing the truncated bits
+        let mut truncated_bits: Vec<F2> = Vec::with_capacity(x_bits.len() - truncate_by);
+        let mut x_truncated = FE::PrimeField::ZERO;
+        let mut twos = FE::PrimeField::ONE;
+        for i in truncate_by..x.bits.len() {
+            truncated_bits.push(x.bits[i].0);
+            if x.bits[i].0 == F2::ONE {
+                x_truncated += twos;
+            }
+            twos += twos;
+        }
+
+        let m_trunc_bits = self
+            .fcom_f2
+            .input_with_macprover(channel, rng, truncated_bits.as_slice())
+            .unwrap();
+        let m_trunc_x = self
+            .fcom
+            .input_with_macprover(channel, rng, &[x_truncated])
+            .unwrap()[0];
+
+        let m_trunc_away_bits = self
+            .fcom_f2
+            .input_with_macprover(channel, rng, trunc_away_bits.as_slice())
+            .unwrap();
+        let m_trunc_away_x = self
+            .fcom
+            .input_with_macprover(channel, rng, &[x_truncated_away])
+            .unwrap()[0];
+
+        let y = self.fcom.add(
+            self.fcom.affine_mult_cst(trunc_twos, m_trunc_x),
+            m_trunc_away_x,
+        );
+
+        assert_eq!(x.value.0, y.0);
+
+        /*println!(
+            "{:?}\n{:?}\n{:?}\n{:?}",
+            x.value.0, y.0, x_truncated, x_truncated_away
+        );
+        println!("----------------------------------------");
+         */
+
+        return (
+            EdabitsProver {
+                bits: m_trunc_bits,
+                value: m_trunc_x,
+            },
+            EdabitsProver {
+                bits: m_trunc_away_bits,
+                value: m_trunc_away_x,
+            },
+            y,
+        );
+    }
 }
 
 /// Verifier for the edabits conversion protocol
 pub struct VerifierConv<FE: FiniteField> {
     fcom_f2: FComVerifier<F40b>,
-    fcom: FComVerifier<FE>,
+    /// fcom verifier
+    pub fcom: FComVerifier<FE>,
 }
 
 // The Finite field is required to be a prime field because of the fdabit
@@ -1469,6 +1553,44 @@ impl<FE: FiniteField<PrimeField = FE>> VerifierConv<FE> {
         println!("step 6)a-e) bitADDcarry etc: {:?}", phase2.elapsed());
 
         Ok(())
+    }
+
+    /// truncate checking
+    pub fn truncate<C: AbstractChannel, RNG: CryptoRng + Rng>(
+        &mut self,
+        channel: &mut C,
+        rng: &mut RNG,
+        truncate_by: usize,
+        remaining_size: usize,
+    ) -> (EdabitsVerifier<FE>, EdabitsVerifier<FE>, MacVerifier<FE>) {
+        let m_trunc_bits = self.fcom_f2.input(channel, rng, remaining_size).unwrap();
+
+        let m_trunc_x = self.fcom.input(channel, rng, 1).unwrap()[0];
+
+        let m_trunc_away_bits = self.fcom_f2.input(channel, rng, truncate_by).unwrap();
+
+        let m_trunc_away_x = self.fcom.input(channel, rng, 1).unwrap()[0];
+
+        let mut twos = FE::PrimeField::ONE;
+        for _ in 0..truncate_by {
+            twos += twos;
+        }
+
+        let y = self
+            .fcom
+            .add(self.fcom.affine_mult_cst(twos, m_trunc_x), m_trunc_away_x);
+
+        return (
+            EdabitsVerifier {
+                bits: m_trunc_bits,
+                value: m_trunc_x,
+            },
+            EdabitsVerifier {
+                bits: m_trunc_away_bits,
+                value: m_trunc_away_x,
+            },
+            y,
+        );
     }
 }
 
