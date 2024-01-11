@@ -175,7 +175,7 @@ pub fn prover_quicksilver_variant<C: AbstractChannel, RNG: CryptoRng + Rng>(
     //}
 }
 
-/// variant of quicksilver
+/// variant of quicksilver used for range proofs
 pub fn verifier_quicksilver_variant<C: AbstractChannel, RNG: CryptoRng + Rng>(
     channel: &mut C,
     rng: &mut RNG,
