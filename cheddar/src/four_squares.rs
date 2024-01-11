@@ -9,6 +9,7 @@ use scuttlebutt::field::{F61p, FiniteField};
 use scuttlebutt::ring::FiniteRing;
 use scuttlebutt::Block;
 use scuttlebutt::{AbstractChannel, AesRng};
+use std::ops::Sub;
 use std::time::{Duration, Instant};
 
 const MODULUS: u64 = (1 << 61) - 1;
@@ -96,6 +97,13 @@ impl FourSquaresRangeProver {
         let mut decomposed_vals_squared: Vec<F61p> = Vec::with_capacity(xs.len() * 4);
         let mut combined_bounds: Vec<F61p> = Vec::with_capacity(xs.len());
 
+        let low: u64 = 50;
+        let upp: u64 = 6000;
+        let n_x: u64 = (3000 - low) * (upp - 3000);
+
+        let decomposed = decompose_four_squares(n_x);
+        //println!("decomposed vals: {:?}", decomposed);
+
         for i in 0..xs.len() {
             let x_minus_l = self.fcom.affine_add_cst(-F61p(lower_bounds[i]), xs[i]);
             let u_minus_x = self
@@ -105,7 +113,13 @@ impl FourSquaresRangeProver {
             let val_to_prove = x_minus_l.0 * u_minus_x.0;
             combined_bounds.push(val_to_prove);
             let start = Instant::now();
+
             let (a, b, c, d) = decompose_four_squares(val_to_prove.0);
+            println!(
+                "decomposed: {:?} into vals: ({:?},{:?},{:?},{:?})",
+                val_to_prove.0, a, b, c, d
+            );
+
             computing_ranges += start.elapsed();
             //assert_eq!(a * a + b * b + c * c + d * d, val_to_prove.0);
             //println!("{:?}, {:?}, {:?}, {:?}", a, b, c, d);
@@ -228,7 +242,18 @@ impl FourSquaresRangeProver {
             .input_with_macprover(channel, rng, &bit_decompositions)
             .unwrap();
 
-        // prove that this bit_decomposition stuff is actually bits
+        for i in &bit_decomposition_macs {
+            let x_minus_one = self.fcom.affine_add_cst(F61p(0).sub(F61p::ONE), *i);
+            let out = x_minus_one.0 * i.0;
+            let out_m = self
+                .fcom
+                .input_with_macprover(channel, rng, &[out])
+                .unwrap();
+            triples.push((x_minus_one, *i, out_m[0]));
+            equality_checks.push(out_m[0]);
+        }
+
+        // todo: prove that this bit_decomposition stuff is actually bits
         let mut length_checks: Vec<MacProver<F61p>> = Vec::with_capacity(iterations);
         for i in 0..iterations {
             let mut res = Default::default();
@@ -252,8 +277,7 @@ impl FourSquaresRangeProver {
             length_checks.push(self.fcom.sub(results[i], res));
         }
 
-        // TODO: Remember to hide the bits before opening
-        // TODO: Remember to do a bit decomposition to show that it fits, rather than just opening the value
+        // todo: this open is not required by the protocol, it is debug
         self.fcom.open(channel, &results).unwrap();
 
         println!("triples len: {:?}", triples.len());
@@ -292,7 +316,19 @@ impl FourSquaresRangeVerifier {
         let mask = pow(2, mask_bit_size as usize);
 
         for x in results {
+            println!(
+                "x={:?}, x_signed={:?}, mask={:?}",
+                x,
+                x.compute_signed(),
+                mask
+            );
             if !(x.compute_signed() < mask as i64) {
+                println!(
+                    "x={:?}, x_signed={:?}, mask={:?}",
+                    x,
+                    x.compute_signed(),
+                    mask
+                );
                 return Err(Error::Other("Prover fucked up".to_string()));
             }
         }
@@ -390,6 +426,13 @@ impl FourSquaresRangeVerifier {
             .fcom
             .input(channel, rng, iterations * mask_bit_size as usize)
             .unwrap();
+
+        for i in &bit_decomposition_macs {
+            let x_minus_one = self.fcom.affine_add_cst(F61p(0).sub(F61p::ONE), *i);
+            let out_m = self.fcom.input(channel, rng, 1).unwrap();
+            triples.push((x_minus_one, *i, out_m[0]));
+            equality_checks.push(out_m[0]);
+        }
 
         // prove that this bit_decomposition stuff is actually bits
         let mut length_checks: Vec<MacVerifier<F61p>> = Vec::with_capacity(iterations);

@@ -8,10 +8,12 @@ use crate::svole::wykw::{LpnParams, Receiver, Sender};
 use crate::svole::{SVoleReceiver, SVoleSender};
 use generic_array::{typenum::Unsigned, GenericArray};
 use rand::{CryptoRng, Rng, SeedableRng};
-use scuttlebutt::field::Degree;
+use scuttlebutt::field::polynomial::Polynomial;
+use scuttlebutt::field::{Degree, F61p};
 use scuttlebutt::ring::FiniteRing;
 use scuttlebutt::serialization::CanonicalSerialize;
 use scuttlebutt::{field::FiniteField, AbstractChannel, AesRng, Block};
+use smallvec::{smallvec, SmallVec};
 use std::time::Instant;
 use subtle::{Choice, ConditionallySelectable};
 
@@ -205,6 +207,12 @@ impl<FE: FiniteField> FComProver<FE> {
     #[inline]
     pub fn affine_add_cst(&self, cst: FE::PrimeField, x: MacProver<FE>) -> MacProver<FE> {
         return MacProver(cst + x.0, x.1);
+    }
+
+    /// Sub a constant from a Mac.
+    #[inline]
+    pub fn affine_sub_cst(&self, cst: FE::PrimeField, x: MacProver<FE>) -> MacProver<FE> {
+        return MacProver(x.0 - cst, x.1);
     }
 
     /// Multiply by a constant a Mac.
@@ -494,6 +502,12 @@ impl<FE: FiniteField> FComVerifier<FE> {
         let y = channel.read_serializable::<FE::PrimeField>()?;
         let out = MacVerifier(r.0 - y * self.delta);
         Ok(out)
+    }
+
+    /// Sub a constant to a Mac.
+    #[inline]
+    pub fn affine_sub_cst(&self, cst: FE::PrimeField, x_mac: MacVerifier<FE>) -> MacVerifier<FE> {
+        return MacVerifier(x_mac.0 + cst * self.delta);
     }
 
     /// Add a constant to a Mac.

@@ -2,7 +2,7 @@
 
 use super::homcom::{FComProver, FComVerifier, MacProver, MacVerifier};
 use crate::{errors::Error, svole::wykw::LpnParams};
-use generic_array::typenum::Unsigned;
+use generic_array::typenum::{True, Unsigned};
 use rand::{CryptoRng, Rng, SeedableRng};
 use scuttlebutt::{
     field::{F40b, FiniteField, F2},
@@ -17,7 +17,8 @@ use subtle::{ConditionallySelectable, ConstantTimeEq};
 /// EdabitsProver struct
 #[derive(Clone)]
 pub struct EdabitsProver<FE: FiniteField> {
-    bits: Vec<MacProver<F40b>>,
+    /// prover bits for edabits
+    pub bits: Vec<MacProver<F40b>>,
     /// prover val and key for edabit
     pub value: MacProver<FE>,
 }
@@ -37,7 +38,8 @@ fn copy_edabits_prover<FE: FiniteField>(edabits: &EdabitsProver<FE>) -> EdabitsP
 /// EdabitsVerifier struct
 #[derive(Clone)]
 pub struct EdabitsVerifier<FE: FiniteField> {
-    bits: Vec<MacVerifier<F40b>>,
+    /// verifier keys of bits
+    pub bits: Vec<MacVerifier<F40b>>,
     /// verifier key of edabit
     pub value: MacVerifier<FE>,
 }
@@ -157,7 +159,8 @@ fn check_parameters<FE: FiniteField>(n: usize, gamma: usize) -> Result<(), Error
 
 /// Prover for the edabits conversion protocol
 pub struct ProverConv<FE: FiniteField> {
-    fcom_f2: FComProver<F40b>,
+    /// fcom_prover_f2
+    pub fcom_f2: FComProver<F40b>,
     /// fcom_prover
     pub fcom: FComProver<FE>,
 }
@@ -830,6 +833,19 @@ impl<FE: FiniteField<PrimeField = FE>> ProverConv<FE> {
         Ok(())
     }
 
+    /// checking ranges
+    pub fn range_check<C: AbstractChannel, RNG: CryptoRng + Rng>(
+        &mut self,
+        channel: &mut TrackChannel<C>,
+        rng: &mut RNG,
+        x: &Vec<EdabitsProver<FE>>,
+        range: usize,
+        num_bucket: usize,
+    ) -> Result<(), Error> {
+        assert_eq!(range, x[0].bits.len());
+        return self.conv(channel, rng, num_bucket, num_bucket, x, None, true);
+    }
+
     /// truncation checking
     pub fn truncate<C: AbstractChannel, RNG: CryptoRng + Rng>(
         &mut self,
@@ -913,7 +929,8 @@ impl<FE: FiniteField<PrimeField = FE>> ProverConv<FE> {
 
 /// Verifier for the edabits conversion protocol
 pub struct VerifierConv<FE: FiniteField> {
-    fcom_f2: FComVerifier<F40b>,
+    /// fcom verifier f2
+    pub fcom_f2: FComVerifier<F40b>,
     /// fcom verifier
     pub fcom: FComVerifier<FE>,
 }
@@ -1553,6 +1570,19 @@ impl<FE: FiniteField<PrimeField = FE>> VerifierConv<FE> {
         println!("step 6)a-e) bitADDcarry etc: {:?}", phase2.elapsed());
 
         Ok(())
+    }
+
+    /// checking ranges
+    pub fn range_check<C: AbstractChannel, RNG: CryptoRng + Rng>(
+        &mut self,
+        channel: &mut TrackChannel<C>,
+        rng: &mut RNG,
+        x: &Vec<EdabitsVerifier<FE>>,
+        range: usize,
+        num_bucket: usize,
+    ) -> Result<(), Error> {
+        assert_eq!(range, x[0].bits.len());
+        return self.conv(channel, rng, num_bucket, num_bucket, x, None, true);
     }
 
     /// truncate checking

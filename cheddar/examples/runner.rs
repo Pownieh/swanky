@@ -8,7 +8,7 @@ use scuttlebutt::field::F61p;
 use scuttlebutt::{
     track_unix_channel_pair, unix_channel_pair, AbstractChannel, AesRng, TrackChannel,
 };
-use square_decomp::{prover::RangeProver, verifier::RangeVerifier};
+use square_decomp::four_squares::{FourSquaresRangeProver, FourSquaresRangeVerifier};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -17,28 +17,34 @@ use serde_json;
 // todo: something is completely off with the numbers. Look at last run
 // the ones that break are above the mask_bit_size, so they can't be masked.
 
-const N: usize = 2_000;
-const STAT_SEC: usize = 50;
+const N: usize = 2000;
+const STAT_SEC: usize = 20;
 const PROD: usize = N * STAT_SEC;
 const C_VEC: usize = N * 4;
-// todo: C_VEC SIZE = 4 * N
 const MODULUS: u64 = (1 << 61) - 1;
 
-const VAL_BOUNDS: [u64; 2] = [4000, 5000];
-const LOWER_BOUNDS: [u64; 2] = [2000, 3000];
-const UPPER_BOUNDS: [u64; 2] = [6000, 7000];
+const VAL_BOUNDS: [u64; 2] = [2000, 4000];
+const LOWER_BOUNDS: [u64; 2] = [49, 50];
+const UPPER_BOUNDS: [u64; 2] = [5999, 6000];
 
 fn compute_bound() -> (u64, u64, u64) {
     // bound = sqrt(p) / (39 * sqrt(4m) + 4))
     let infinity_bound = f64::ceil(f64::sqrt((MODULUS as f64 - 1f64) / (2f64 * 4f64)));
     let numerator: f64 = infinity_bound;
-    let denominator: f64 = 2f64 * (9.75 * f64::sqrt(4f64 * N as f64) + 1f64);
+    // let denominator: f64 = 2f64 * (9.75 * f64::sqrt(4f64 * N as f64) + 2f64);
+    let denominator: f64 = (9.75 * f64::sqrt(4f64 * N as f64) + 2f64);
+    let old_denominator: f64 = (4f64 * N as f64) + 2f64;
+
+    println!("num: {:?}, denom: {:?}", numerator, denominator);
 
     // We have to add a mask that essentially adds an extra bit, so we what we have to add is really
     // just the size of the infinity_bound / denominator. Now, the check changes to ensuring that
     // our number is really below twice that.
 
     let bound = f64::ceil(numerator / denominator) as u64;
+    let old_bound = f64::ceil(numerator / old_denominator) as u64;
+
+    println!("bound: {:?}, old_bound: {:?}", bound / 2, old_bound / 2);
 
     /* todo: since we are now adding much more than the bound, do we allow the value to potentially go very negative, since we push it above 0?
         does this allow the prover to cheat if a lot of the random values are -1? We probably need a sign bit :(
@@ -65,10 +71,13 @@ fn compute_bound() -> (u64, u64, u64) {
 
     */
     // compute the buffer to the nearest power of two for cleaner proof (note, closest to 2 * bound)
-    let mask_bit_size = f64::ceil((bound as f64).log2());
+    let mask_bit_size = f64::ceil((bound as f64 / 2.0).log2());
 
     let buffer = pow(2, mask_bit_size as usize) - bound;
+    let infinity_bound_bit = f64::ceil(infinity_bound as f64).log2();
+    let buffer = pow(2, infinity_bound_bit as usize) - infinity_bound as u64;
     let mask = bound + buffer;
+    let buffer = 0;
 
     return (bound, buffer, mask_bit_size as u64);
 }
@@ -131,7 +140,7 @@ fn run_prover<C: AbstractChannel>(
     lpn_extend: LpnParams,
 ) -> (Duration, Duration) {
     let mut rng = AesRng::new();
-    let mut prover = RangeProver::init(channel, &mut rng, lpn_setup, lpn_extend);
+    let mut prover = FourSquaresRangeProver::init(channel, &mut rng, lpn_setup, lpn_extend);
 
     let xs_m = prover
         .fcom
@@ -164,7 +173,7 @@ fn run_verifier<C: AbstractChannel>(
     lpn_extend: LpnParams,
 ) -> Duration {
     let mut rng = AesRng::new();
-    let mut verifier = RangeVerifier::init(channel, &mut rng, lpn_setup, lpn_extend);
+    let mut verifier = FourSquaresRangeVerifier::init(channel, &mut rng, lpn_setup, lpn_extend);
 
     let xs_m = verifier.fcom.input(channel, &mut rng, N).unwrap();
 
